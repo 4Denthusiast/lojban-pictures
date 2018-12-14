@@ -104,8 +104,15 @@ lineRooted : {edgeType : stubType -> stubType -> Type} -> (a:stubType) -> (b:stu
 lineRooted x y e ns {ok} = MkRooted 0 $ lineGraph x y e ns {ok}
 
 export
-graphRootUnion : Graph s e n -> RootedGraph s e n -> RootedGraph s e n
-graphRootUnion g (MkRooted r g') = MkRooted r (g' <+> g)
+starGraph : {edgeType : stubType -> stubType -> Type} -> (a:stubType) -> (b:stubType) -> edgeType a b -> nodeType -> List nodeType -> RootedGraph stubType edgeType nodeType
+starGraph x y e rn ns = MkRooted 0 $ MkGraph (fromList ((0,rn)::zip ((+1)<$>indices) ns)) (fromList ((\i => (i, MkEdge 0 (i+1) x y e)) <$> indices))
+    where indices = takeWhile (< length ns) [0..length ns] -- can't subtract in Nat
+
+export
+taggedStarGraph : {edgeType : stubType -> stubType -> Type} -> nodeType -> List ((a:stubType**b:stubType**edgeType a b), nodeType) -> RootedGraph stubType edgeType nodeType
+taggedStarGraph rn ns = MkRooted 0 $ MkGraph (fromList $ Basics.fst nes) (fromList $ Basics.snd nes)
+    where nes : (List (NodeLabel, nodeType), List (EdgeLabel, Edge stubType edgeType))
+          nes = unzip $ zipWith (\i, ((x**y**e),n) => ((i+1, n), (i, MkEdge 0 (i+1) x y e))) [0..length ns] ns
 
 public export
 data PictureStubLabel = FreeStub | SeFreeStub | NumberedStub Nat
