@@ -43,9 +43,9 @@ data Selma'o =
     GOhA |
     GUhA |
     I    | -- [prev I, next I, sentence]
-    JA   |
+    JA   | -- [head, left opt, right opt, simultaneous tag e.g. .ijoibaibo]
     JAI  |
-    JOI  |
+    JOI  | -- [head, left opt, right opt, simultaneous tag e.g. .ijoibaibo]
     JOhE |
     JOhI |
     KE   |
@@ -122,7 +122,7 @@ data Selma'o =
     ZIhE |
     ZO   |
     ZOI  |
-    ZOhU |
+    ZOhU | -- [outer sentence, inner sentence, prenex terms]
     Brivla |
     Cmevla
 
