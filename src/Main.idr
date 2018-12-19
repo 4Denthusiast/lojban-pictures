@@ -1,24 +1,27 @@
 module Main
 
+import Words
+import ParserUtils
+import PreParser
+import Graph
 import Parser
+import Render
 
+import Control.Monad.Identity
 import Graphics.Color
 import Graphics.SDL2.SDL
+import Lightyear.Core
 
-waitToClose : IO ()
-waitToClose = case !waitEvent of
-                  Just AppQuit => pure ()
-                  ev           => do putStrLn (show ev)
-                                     waitToClose
+addErr : String -> Either String a -> Either String a
+addErr e' (Left e) = Left (e' ++ e)
+addErr _ (Right x) = Right x
 
 main : IO ()
-main = do putStrLn "1"
-          (ctx, rend) <- startSDL "Pretty lojban" 400 400
-          putStrLn "2"
-          sdlSetRenderDrawColor rend 255 255 255 255
-          sdlRenderClear rend
-          filledPolygon rend [10,390,390,10] [10,10,390,390] 0 0 0 255
-          renderPresent rend
-          waitToClose
-          putStrLn "3"
-          quit
+main = do putStr "Enter a lojban text:\n>"
+          jboText <- getLine
+          let rawWords = addErr "raw word error:\n" $ runParser wordify jboText
+          let words = rawWords >>= addErr "tokenizer error:\n" . runParser tokenize
+          let picture = words >>= addErr "parser error:\n" . runParser wholeText
+          case picture of
+              Left err => putStrLn err
+              Right gr => renderPicture gr

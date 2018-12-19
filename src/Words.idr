@@ -255,7 +255,7 @@ implementation Eq Selma'o where
 
 public export
 WordPicture : Type
-WordPicture = ()
+WordPicture = String
 
 public export
 record WordRecord where
@@ -298,15 +298,20 @@ trieFind (l::ls) (Branch _ bs) = lookup l bs >>= trieFind ls
 
 wordRecords : Trie Char WordRecord
 wordRecords = foldr (\w, t => trieAppend (unpack $ string w) w t) emptyTrie [
-        MkWordRecord A "a" (),
-        MkWordRecord BU "bu" (),
-        MkWordRecord I "i" (),
-        MkWordRecord KU "ku" (),
-        MkWordRecord LE "le" (),
-        MkWordRecord LE "lo" (),
-        MkWordRecord Y "y" (),
-        MkWordRecord ZOI "zoi" (),
-        MkWordRecord Brivla "broda" ()
+        MkWordRecord A "a" "a",
+        MkWordRecord BU "bu" "bu",
+        MkWordRecord I "i" "i",
+        MkWordRecord KU "ku" "ku",
+        MkWordRecord LE "le" "le",
+        MkWordRecord LE "lo" "lo",
+        MkWordRecord KOhA "mi" "mi",
+        MkWordRecord NAI "nai" "nai",
+        MkWordRecord NA "na" "na",
+        MkWordRecord NIhO "ni'o" "ni'o",
+        MkWordRecord NIhO "no'i" "no'i",
+        MkWordRecord Y "y" "y",
+        MkWordRecord ZOI "zoi" "zoi",
+        MkWordRecord Brivla "broda" "broda"
     ]
 
 tryMaybe : Maybe a -> Lazy (Maybe a) -> Maybe a

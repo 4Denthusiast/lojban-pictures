@@ -7,6 +7,7 @@ import Lightyear.Combinators
 import Lightyear.Core
 import Lightyear.Strings
 
+export
 data RawWord = MkRawWord String String
 
 isWordChar : Char -> Bool
@@ -21,6 +22,7 @@ makeRawWord s = MkRawWord (pack $ map jboToLower $ unpack $ s) s
           jboToLower 'h' = '\''
           jboToLower c = toLower c
 
+export
 wordify : ParserT String Identity (List RawWord)
 wordify = concat <$> many (cmavoCompound <|> otherWord) <* eof
     where appendLast : List RawWord -> String -> List RawWord
@@ -41,14 +43,14 @@ wordify = concat <$> many (cmavoCompound <|> otherWord) <* eof
 
 -- Make a custom WordRecord if it's cmevla form.
 cmevlaRecord : String -> Maybe WordRecord
-cmevlaRecord s = if cmevlaForm $ unpack s then Just $ MkWordRecord Cmevla s () else Nothing
+cmevlaRecord s = if cmevlaForm $ unpack s then Just $ MkWordRecord Cmevla s s else Nothing
     where cmevlaForm : List Char -> Bool
           cmevlaForm [] = False
           cmevlaForm (c::cs) = not $ isVowel $ last (c::cs)
 
 -- Fallback implementation for brivla so that things parse without me having to make all the pictures.
 brivlaRecord : String -> Maybe WordRecord
-brivlaRecord s = if brivlaForm $ unpack s then Just $ MkWordRecord Brivla s () else Nothing
+brivlaRecord s = if brivlaForm $ unpack s then Just $ MkWordRecord Brivla s s else Nothing
     where brivlaForm : List Char -> Bool
           brivlaForm cs = let cs' = map (not . isVowel) cs in foldr (flip (||) . Delay) False $ the (List Bool) $ zipWith (&&) cs' (Delay <$> drop 1 cs')
 
@@ -56,6 +58,7 @@ tryMaybe : Maybe a -> Lazy (Maybe a) -> Maybe a
 tryMaybe (Just x) _ = Just x
 tryMaybe Nothing  y = y
 
+export
 getWordRecord : String -> Maybe WordRecord
 getWordRecord s = tryMaybe (findWordRecord s) $ tryMaybe (cmevlaRecord s) (brivlaRecord s)
 
@@ -66,15 +69,17 @@ wordRecordParser = do
         Nothing => fail $ "Unknown word: "++s
         Just wr => pure wr
 
+public export
 Tokenizer : Type
 Tokenizer = ParserT (List RawWord) Identity (List Word)
 
 mutual
+    export
     tokenize : Tokenizer
     tokenize = reverse <$> tokenize' []
     
     tokenize' : List Word -> Tokenizer
-    tokenize' ws = do
+    tokenize' ws = (eof *> pure ws) <|> do
         wr <- wordRecordParser
         case selma'o wr of
             BU => tokenizeBU ws

@@ -5,10 +5,11 @@ import Words
 import Data.SortedMap
 import Data.Vect
 
-export
+public export
 NodeLabel : Type
 NodeLabel = Nat
 
+public export
 data Edge : (stubType : Type) -> (edgeType : stubType -> stubType -> Type) -> Type where
     MkEdge : NodeLabel ->
              NodeLabel ->
@@ -24,6 +25,14 @@ data Graph : (nRoots : Nat) -> (stubType : Type) -> (edgeType : stubType -> stub
               SortedMap NodeLabel nodeType ->
               List (Edge stubType edgeType) ->
               Graph nRoots stubType edgeType nodeType
+
+export
+graphNodes : Graph i s e n -> SortedMap NodeLabel n
+graphNodes (MkGraph _ ns _) = ns
+
+export
+graphEdges : Graph i s e n -> List (Edge s e)
+graphEdges (MkGraph _ _ es) = es
 
 -- naturality of the function should guarantee that the graph invariant is preserved.
 export
@@ -86,11 +95,11 @@ export
 join : {i:Nat} -> {i':Nat} -> Graph i s e (Graph i' s e n) -> Graph (i*i') s e n
 join {i} {i'} (MkGraph r0 gs es0) = MkGraph (vectFlatten $ map (fromJust . flip lookup rs) r0) ns (es0' ++ es)
     where foldResult : (SortedMap NodeLabel (Vect i' NodeLabel), SortedMap NodeLabel n, NodeLabel, List (Edge s e))
-          foldResult {-(rs, ns, nOff, es)-} = foldr (
-                  \(l, MkGraph r ns' es'), (rsi, nsi, nOffi, esi) => (
+          foldResult {-(rs, ns, nOff, es)-} = foldl (
+                  \(rsi, nsi, nOffi, esi), (l, MkGraph r ns' es') => (
                       insert l ((+nOffi)<$>r) rsi,
                       mergeLeft nsi $ mapKeys (+nOffi) ns',
-                      nOffi + nextKey nsi,
+                      nOffi + nextKey ns',
                       map (adjustEdge (+nOffi)) es' ++ esi
                   )
               ) (empty, empty, 0, []) (toList gs)
