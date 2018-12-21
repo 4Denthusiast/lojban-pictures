@@ -1,5 +1,8 @@
 module Words
 
+import Data.SortedMap
+import Data.Vect
+
 public export
 data Selma'o =
     A    |
@@ -50,6 +53,7 @@ data Selma'o =
     JOhI |
     KE   |
     KEI  |
+    KEhE |
     KI   |
     KOhA |
     KU   |
@@ -176,6 +180,7 @@ implementation Eq Selma'o where
     (==) JOhI JOhI = True
     (==) KE   KE   = True
     (==) KEI  KEI  = True
+    (==) KEhE KEhE = True
     (==) KI   KI   = True
     (==) KOhA KOhA = True
     (==) KU   KU   = True
@@ -254,8 +259,36 @@ implementation Eq Selma'o where
     (==) _ _ = False
 
 public export
-WordPicture : Type
-WordPicture = String
+data PictureStubLabel = FreeStub | SeFreeStub | NumberedStub Nat | Inside | Around | Around' | SeltauStub | TertauStub
+
+pictureStubNumeral : PictureStubLabel -> (Bool, Nat)
+pictureStubNumeral FreeStub = (False, 0)
+pictureStubNumeral SeFreeStub = (False, 1)
+pictureStubNumeral (NumberedStub n) = (False, 2+n)
+pictureStubNumeral Inside = (True, 0)
+pictureStubNumeral Around = (True, 1)
+pictureStubNumeral Around' = (True, 2)
+pictureStubNumeral SeltauStub = (True, 3)
+pictureStubNumeral TertauStub = (True, 4)
+
+implementation Eq PictureStubLabel where
+    (==) s s' = pictureStubNumeral s == pictureStubNumeral s'
+
+implementation Ord PictureStubLabel where
+    compare s s' = compare (pictureStubNumeral s) (pictureStubNumeral s')
+
+public export
+data StubPos = MkStubPos (Vect 2 Double) (Vect 2 Double)
+
+public export
+StubPositions : Type
+StubPositions = List PictureStubLabel -> PictureStubLabel -> Maybe StubPos
+
+public export
+record WordPicture where
+    constructor MkWordPicture
+    string : String
+    stubs : StubPositions
 
 public export
 record WordRecord where
@@ -274,44 +307,91 @@ wordSelma'o (MagicWordZEI _ _) = Brivla
 wordSelma'o (MagicWordBU _) = BY
 wordSelma'o _ = KOhA --The other magic word things are all sumti
 
-data Trie l t = Branch (Maybe t) (List (l,Trie l t))
+-- terminators, Y
+emptyStubPositions : StubPositions
+emptyStubPositions _ _ = Nothing
 
-emptyTrie : Trie l t
-emptyTrie = Branch Nothing []
+cmavrxavoStubPositions : StubPositions
+cmavrxavoStubPositions _ (NumberedStub       Z  ) = Just $ MkStubPos [ 0  , 0.5] [0, 1]
+cmavrxavoStubPositions _ (NumberedStub    (S Z) ) = Just $ MkStubPos [ 0.5,-0.5] [0,-1]
+cmavrxavoStubPositions _ (NumberedStub (S (S Z))) = Just $ MkStubPos [-0.5,-0.5] [0,-1]
+cmavrxavoStubPositions _ _ = Nothing
 
-singletonTrie : List l -> t -> Trie l t
-singletonTrie [] x = Branch (Just x) []
-singletonTrie (l::ls) x = Branch Nothing [(l,singletonTrie ls x)]
+cmavrxivoStubPositions : StubPositions
+cmavrxivoStubPositions _ (NumberedStub       Z  ) = Just $ MkStubPos [0,0] [-1,0]
+cmavrxivoStubPositions _ (NumberedStub    (S Z) ) = Just $ MkStubPos [0,0] [ 1,0]
+cmavrxivoStubPositions _ (NumberedStub (S (S Z))) = Just $ MkStubPos [0,0] [0,-1]
+cmavrxivoStubPositions _ _ = Nothing
 
-trieAppend : Eq l => List l -> t -> Trie l t -> Trie l t
-trieAppend [] x (Branch _ bs) = Branch (Just x) bs
-trieAppend (c::cs) x (Branch y bs) = Branch y (trieAppend' c cs x bs)
-    where trieAppend' : l -> List l -> t -> List (l, Trie l t) -> List (l, Trie l t)
-          trieAppend' c cs x [] = [(c, singletonTrie cs x)]
-          trieAppend' c cs x ((c',b)::bs) = if c' == c
-              then (c,trieAppend cs x b) :: bs
-              else (c',b) :: trieAppend' c cs x bs
+cmavrko'aStubPositions : StubPositions
+cmavrko'aStubPositions _ (NumberedStub Z) = Just $ MkStubPos [0,0] [0,1]
+cmavrko'aStubPositions _ _ = Nothing
 
-trieFind : Eq l => List l -> Trie l t -> Maybe t
-trieFind [] (Branch x _) = x
-trieFind (l::ls) (Branch _ bs) = lookup l bs >>= trieFind ls
+cmavrleStubPositions : StubPositions
+cmavrleStubPositions _ (NumberedStub    Z ) = Just $ MkStubPos [0,0.5] [0, 1]
+cmavrleStubPositions _ (NumberedStub (S Z)) = Just $ MkStubPos [0,-1 ] [0,-1]
+cmavrleStubPositions _ _ = Nothing
 
-wordRecords : Trie Char WordRecord
-wordRecords = foldr (\w, t => trieAppend (unpack $ string w) w t) emptyTrie [
-        MkWordRecord A "a" "a",
-        MkWordRecord BU "bu" "bu",
-        MkWordRecord I "i" "i",
-        MkWordRecord KU "ku" "ku",
-        MkWordRecord LE "le" "le",
-        MkWordRecord LE "lo" "lo",
-        MkWordRecord KOhA "mi" "mi",
-        MkWordRecord NAI "nai" "nai",
-        MkWordRecord NA "na" "na",
-        MkWordRecord NIhO "ni'o" "ni'o",
-        MkWordRecord NIhO "no'i" "no'i",
-        MkWordRecord Y "y" "y",
-        MkWordRecord ZOI "zoi" "zoi",
-        MkWordRecord Brivla "broda" "broda"
+cmavrpaStubPositions : StubPositions
+cmavrpaStubPositions _ (NumberedStub    Z ) = Just $ MkStubPos [ 0.5,0] [ 1,0]
+cmavrpaStubPositions _ (NumberedStub (S Z)) = Just $ MkStubPos [-0.5,0] [-1,0]
+cmavrpaStubPositions _ _ = Nothing
+
+cmavruiStubPositions : StubPositions
+cmavruiStubPositions _ SeFreeStub = Just $ MkStubPos [0,0] [0,-1]
+cmavruiStubPositions _ _ = Nothing
+
+cossin : Double -> Vect 2 Double
+cossin x = [cos x, sin x]
+
+brodaStubPositions : StubPositions
+brodaStubPositions _ (NumberedStub n) = let d = cossin (cast n * pi * (sqrt 5 - 1)) in Just $ MkStubPos d d
+brodaStubPositions _ _ = Nothing
+
+defaultBrivlaStubPositions : StubPositions
+defaultBrivlaStubPositions _ (NumberedStub n) = let d = cossin (cast n * pi * 2/5) in Just $ MkStubPos d d
+defaultBrivlaStubPositions _ _ = Nothing
+
+stubPositionsBySelma'o : Selma'o -> StubPositions
+stubPositionsBySelma'o A    = cmavrxavoStubPositions
+stubPositionsBySelma'o BU   = cmavrpaStubPositions
+stubPositionsBySelma'o I    = cmavrxivoStubPositions
+stubPositionsBySelma'o KOhA = cmavrko'aStubPositions
+stubPositionsBySelma'o KU   = emptyStubPositions
+stubPositionsBySelma'o LE   = cmavrleStubPositions
+stubPositionsBySelma'o NA   = cmavruiStubPositions
+stubPositionsBySelma'o NAI  = cmavruiStubPositions
+stubPositionsBySelma'o NIhO = cmavrxivoStubPositions
+stubPositionsBySelma'o Y    = emptyStubPositions
+stubPositionsBySelma'o ZOI  = cmavrko'aStubPositions
+stubPositionsBySelma'o Brivla = defaultBrivlaStubPositions
+stubPositionsBySelma'o Cmevla = cmavrpaStubPositions
+
+export
+makeWordRecord : Selma'o -> String -> WordRecord
+makeWordRecord sm s = MkWordRecord sm s $ MkWordPicture s (stubPositionsBySelma'o sm)
+
+-- force the compiler to not expand an expression
+partial
+partialId : List a -> List a
+partialId (x::xs) = (x::xs)
+
+wordRecords : SortedMap String WordRecord
+wordRecords = foldr (\w, t => insert (string w) w t) empty $ partialId [
+        makeWordRecord A    "a",
+        makeWordRecord BU   "bu",
+        makeWordRecord I    "i",
+        makeWordRecord KU   "ku",
+        makeWordRecord LE   "le",
+        makeWordRecord LE   "lo",
+        makeWordRecord KOhA "mi",
+        makeWordRecord NAI  "nai",
+        makeWordRecord NA   "na",
+        makeWordRecord NIhO "ni'o",
+        makeWordRecord NIhO "no'i",
+        makeWordRecord Y    "y",
+        makeWordRecord ZOI  "zoi",
+        MkWordRecord Brivla "broda" $ MkWordPicture "broda" brodaStubPositions
     ]
 
 tryMaybe : Maybe a -> Lazy (Maybe a) -> Maybe a
@@ -321,4 +401,4 @@ tryMaybe x _ = x
 -- Get a word record in the case that it's a known word.
 export
 findWordRecord : String -> Maybe WordRecord
-findWordRecord s = trieFind (unpack s) wordRecords
+findWordRecord s = lookup s wordRecords

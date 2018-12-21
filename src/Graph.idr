@@ -127,14 +127,11 @@ starGraph x y e rn ns = MkGraph [0] (fromList ((0,rn)::zip ((+1)<$>indices) ns))
     where indices = takeWhile (< length ns) [0..length ns] -- can't subtract in Nat
 
 public export
-data PictureStubLabel = FreeStub | SeFreeStub | NumberedStub Nat | Inside | Around
-
-public export
 PictureGraph : Nat -> Type
 PictureGraph i = Graph i PictureStubLabel (\s0, s1 => ()) WordPicture
 
 export
-enclosePicture : {i:Nat} -> PictureGraph 1 -> PictureGraph i -> PictureGraph (1 + i)
+enclosePicture : {i:Nat} -> PictureGraph 1 -> PictureGraph i -> PictureGraph (S i)
 enclosePicture {i} a b = case (graphUnion a b') of
         MkGraph (r::r'::rs) ns es => MkGraph (r::rs) ns (es ++ map (\n => MkEdge r n Around Inside ()) (filter (>= r') $ map fst $ toList $ ns))
     where b' : PictureGraph (1+i)

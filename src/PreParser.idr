@@ -43,14 +43,14 @@ wordify = concat <$> many (cmavoCompound <|> otherWord) <* eof
 
 -- Make a custom WordRecord if it's cmevla form.
 cmevlaRecord : String -> Maybe WordRecord
-cmevlaRecord s = if cmevlaForm $ unpack s then Just $ MkWordRecord Cmevla s s else Nothing
+cmevlaRecord s = if cmevlaForm $ unpack s then Just $ makeWordRecord Cmevla s else Nothing
     where cmevlaForm : List Char -> Bool
           cmevlaForm [] = False
           cmevlaForm (c::cs) = not $ isVowel $ last (c::cs)
 
 -- Fallback implementation for brivla so that things parse without me having to make all the pictures.
 brivlaRecord : String -> Maybe WordRecord
-brivlaRecord s = if brivlaForm $ unpack s then Just $ MkWordRecord Brivla s s else Nothing
+brivlaRecord s = if brivlaForm $ unpack s then Just $ makeWordRecord Brivla s else Nothing
     where brivlaForm : List Char -> Bool
           brivlaForm cs = let cs' = map (not . isVowel) cs in foldr (flip (||) . Delay) False $ the (List Bool) $ zipWith (&&) cs' (Delay <$> drop 1 cs')
 
