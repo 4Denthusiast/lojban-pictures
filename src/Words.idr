@@ -1,5 +1,7 @@
 module Words
 
+import Control.Algebra
+import public Control.Algebra.NumericImplementations
 import Data.SortedMap
 import Data.Vect
 
@@ -128,7 +130,7 @@ data Selma'o =
     ZOI  |
     ZOhU | -- [outer sentence, inner sentence, prenex terms]
     Brivla |
-    Cmevla
+    Cmevla -- [head, prev name in string, next name in string]
 
 public export
 implementation Eq Selma'o where
@@ -278,11 +280,86 @@ implementation Ord PictureStubLabel where
     compare s s' = compare (pictureStubNumeral s) (pictureStubNumeral s')
 
 public export
-data StubPos = MkStubPos (Vect 2 Double) (Vect 2 Double)
+PictureEdgeLabel : PictureStubLabel -> PictureStubLabel -> Type
+PictureEdgeLabel _ _ = ()
+
+public export
+record Angle where
+    constructor Ang
+    cos : Double
+    sin : Double
+
+public export
+rotate : Angle -> Vect 2 Double -> Vect 2 Double
+rotate (Ang c s) [x,y] = [c*x+s*y, c*y-s*x]
+
+public export
+implementation Semigroup Angle where
+    (<+>) (Ang c s) (Ang c' s') = Ang (c*c' - s*s') (c*s' + s*c')
+
+public export
+implementation Monoid Angle where
+    neutral = Ang 1 0
+
+public export
+implementation Group Angle where
+    inverse (Ang c s) = Ang c (-s)
+
+public export
+right : Angle
+right = Ang 0 1
+public export
+left : Angle
+left  = Ang 0 (-1)
+public export
+back : Angle
+back  = Ang (-1) 0
+
+public export
+angle : Double -> Angle
+angle x = Ang (cos x) (sin x)
+
+public export
+implementation (Semigroup a) => Semigroup (Vect n a) where
+    (<+>) = liftA2 (<+>)
+
+public export
+implementation (Monoid a) => Monoid (Vect n a) where
+    neutral = pure neutral
+
+public export
+implementation (Group a) => Group (Vect n a) where
+    inverse = map inverse
+
+public export
+record Position where
+    constructor MkPosition
+    pos : Vect 2 Double
+    angle : Angle
+
+public export
+rotatePosition : Angle -> Position -> Position
+rotatePosition da (MkPosition p a) = MkPosition (rotate da p) (da <+> a)
+
+public export
+translatePosition : Vect 2 Double -> Position -> Position
+translatePosition dp (MkPosition p a) = MkPosition (dp <+> p) a
+
+public export
+Semigroup Position where
+    (<+>) (MkPosition p a) p' = translatePosition p $ rotatePosition a p'
+
+public export
+Monoid Position where
+    neutral = MkPosition [0,0] neutral
+
+public export
+Group Position where
+    inverse (MkPosition p a) = MkPosition (rotate (back <-> a) p) (inverse a)
 
 public export
 StubPositions : Type
-StubPositions = List PictureStubLabel -> PictureStubLabel -> Maybe StubPos
+StubPositions = List PictureStubLabel -> PictureStubLabel -> Maybe Position
 
 public export
 record WordPicture where
@@ -312,45 +389,48 @@ emptyStubPositions : StubPositions
 emptyStubPositions _ _ = Nothing
 
 cmavrxavoStubPositions : StubPositions
-cmavrxavoStubPositions _ (NumberedStub       Z  ) = Just $ MkStubPos [ 0  , 0.5] [0, 1]
-cmavrxavoStubPositions _ (NumberedStub    (S Z) ) = Just $ MkStubPos [ 0.5,-0.5] [0,-1]
-cmavrxavoStubPositions _ (NumberedStub (S (S Z))) = Just $ MkStubPos [-0.5,-0.5] [0,-1]
+cmavrxavoStubPositions _ (NumberedStub       Z  ) = Just $ MkPosition [ 0  , 0.5] neutral
+cmavrxavoStubPositions _ (NumberedStub    (S Z) ) = Just $ MkPosition [ 0.5,-0.5] back
+cmavrxavoStubPositions _ (NumberedStub (S (S Z))) = Just $ MkPosition [-0.5,-0.5] back
 cmavrxavoStubPositions _ _ = Nothing
 
 cmavrxivoStubPositions : StubPositions
-cmavrxivoStubPositions _ (NumberedStub       Z  ) = Just $ MkStubPos [0,0] [-1,0]
-cmavrxivoStubPositions _ (NumberedStub    (S Z) ) = Just $ MkStubPos [0,0] [ 1,0]
-cmavrxivoStubPositions _ (NumberedStub (S (S Z))) = Just $ MkStubPos [0,0] [0,-1]
+cmavrxivoStubPositions _ (NumberedStub       Z  ) = Just $ MkPosition [0,0] left
+cmavrxivoStubPositions _ (NumberedStub    (S Z) ) = Just $ MkPosition [0,0] right
+cmavrxivoStubPositions _ (NumberedStub (S (S Z))) = Just $ MkPosition [0,0] back
 cmavrxivoStubPositions _ _ = Nothing
 
 cmavrko'aStubPositions : StubPositions
-cmavrko'aStubPositions _ (NumberedStub Z) = Just $ MkStubPos [0,0] [0,1]
+cmavrko'aStubPositions _ (NumberedStub Z) = Just $ MkPosition [0,0] neutral
 cmavrko'aStubPositions _ _ = Nothing
 
 cmavrleStubPositions : StubPositions
-cmavrleStubPositions _ (NumberedStub    Z ) = Just $ MkStubPos [0,0.5] [0, 1]
-cmavrleStubPositions _ (NumberedStub (S Z)) = Just $ MkStubPos [0,-1 ] [0,-1]
+cmavrleStubPositions _ (NumberedStub    Z ) = Just $ MkPosition [0,0.5] neutral
+cmavrleStubPositions _ (NumberedStub (S Z)) = Just $ MkPosition [0,-1 ] back
 cmavrleStubPositions _ _ = Nothing
 
 cmavrpaStubPositions : StubPositions
-cmavrpaStubPositions _ (NumberedStub    Z ) = Just $ MkStubPos [ 0.5,0] [ 1,0]
-cmavrpaStubPositions _ (NumberedStub (S Z)) = Just $ MkStubPos [-0.5,0] [-1,0]
+cmavrpaStubPositions _ (NumberedStub    Z ) = Just $ MkPosition [ 0.5,0] right
+cmavrpaStubPositions _ (NumberedStub (S Z)) = Just $ MkPosition [-0.5,0] left
 cmavrpaStubPositions _ _ = Nothing
 
 cmavruiStubPositions : StubPositions
-cmavruiStubPositions _ SeFreeStub = Just $ MkStubPos [0,0] [0,-1]
+cmavruiStubPositions _ SeFreeStub = Just $ MkPosition [0,0] back
 cmavruiStubPositions _ _ = Nothing
 
-cossin : Double -> Vect 2 Double
-cossin x = [cos x, sin x]
-
 brodaStubPositions : StubPositions
-brodaStubPositions _ (NumberedStub n) = let d = cossin (cast n * pi * (sqrt 5 - 1)) in Just $ MkStubPos d d
+brodaStubPositions _ (NumberedStub n) = let a = angle (cast n * pi * (sqrt 5 - 1)) in Just $ rotatePosition a $ MkPosition [0,1] neutral
 brodaStubPositions _ _ = Nothing
 
 defaultBrivlaStubPositions : StubPositions
-defaultBrivlaStubPositions _ (NumberedStub n) = let d = cossin (cast n * pi * 2/5) in Just $ MkStubPos d d
+defaultBrivlaStubPositions _ (NumberedStub n) = let a = angle (cast n * pi * 2/5) in Just $ rotatePosition a $ MkPosition [0,1] neutral
 defaultBrivlaStubPositions _ _ = Nothing
+
+cmevlaStubPositions : StubPositions
+cmevlaStubPositions _ (NumberedStub       Z  ) = Just $ MkPosition [0, 1] neutral
+cmevlaStubPositions _ (NumberedStub    (S Z) ) = Just $ MkPosition [0,-1] back
+cmevlaStubPositions _ (NumberedStub (S (S Z))) = Just $ MkPosition [0, 1] neutral
+cmevlaStubPositions _ _ = Nothing
 
 stubPositionsBySelma'o : Selma'o -> StubPositions
 stubPositionsBySelma'o A    = cmavrxavoStubPositions
@@ -365,7 +445,7 @@ stubPositionsBySelma'o NIhO = cmavrxivoStubPositions
 stubPositionsBySelma'o Y    = emptyStubPositions
 stubPositionsBySelma'o ZOI  = cmavrko'aStubPositions
 stubPositionsBySelma'o Brivla = defaultBrivlaStubPositions
-stubPositionsBySelma'o Cmevla = cmavrpaStubPositions
+stubPositionsBySelma'o Cmevla = cmevlaStubPositions
 
 export
 makeWordRecord : Selma'o -> String -> WordRecord

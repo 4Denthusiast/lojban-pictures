@@ -27,21 +27,21 @@ findWordPicture w = case getWordRecord w of
 -- junction to indicate multiple nodes in the same place
 confluencePicture : PictureGraph 1
 confluencePicture = pure $ MkWordPicture "" $ \_, s => case s of
-    NumberedStub    Z  => Just $ MkStubPos [0,0] [0,1]
-    NumberedStub (S Z) => Just $ MkStubPos [0,0] [0,-1]
+    NumberedStub    Z  => Just $ MkPosition [0,0] neutral
+    NumberedStub (S Z) => Just $ MkPosition [0,0] back
     _ => Nothing
 
 quantifierPicture : PictureGraph 1
 quantifierPicture = pure $ MkWordPicture "│├" $ \_, s => case s of
-    NumberedStub       Z   => Just $ MkStubPos [0, 0.5] [0,1]
-    NumberedStub    (S Z)  => Just $ MkStubPos [0,-0.5] [0,-1]
-    NumberedStub (S (S Z)) => Just $ MkStubPos [0.2,0] [1,0]
+    NumberedStub       Z   => Just $ MkPosition [0, 0.5] neutral
+    NumberedStub    (S Z)  => Just $ MkPosition [0,-0.5] back
+    NumberedStub (S (S Z)) => Just $ MkPosition [0.2,0] right
     _ => Nothing
 
 -- sort of like CU, a circle enclosing the main selbri of a sentence.
 bridiCircle : PictureGraph 1
 bridiCircle = pure $ MkWordPicture "○" $ \_, s => case s of
-    NumberedStub Z => Just $ MkStubPos [0,1] [0,1]
+    NumberedStub Z => Just $ MkPosition [0,1] neutral
     _ => Nothing
 
 createNi'os : Nat -> WordParser 1

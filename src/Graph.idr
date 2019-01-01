@@ -19,7 +19,7 @@ data Edge : (stubType : Type) -> (edgeType : stubType -> stubType -> Type) -> Ty
              Edge stubType edgeType
 
 -- invariants: All the NodeLabels referred to in the edge and root lists actually exist.
-export
+public export
 data Graph : (nRoots : Nat) -> (stubType : Type) -> (edgeType : stubType -> stubType -> Type) -> (nodeType : Type) -> Type where
     MkGraph : Vect nRoots NodeLabel ->
               SortedMap NodeLabel nodeType ->
@@ -128,7 +128,7 @@ starGraph x y e rn ns = MkGraph [0] (fromList ((0,rn)::zip ((+1)<$>indices) ns))
 
 public export
 PictureGraph : Nat -> Type
-PictureGraph i = Graph i PictureStubLabel (\s0, s1 => ()) WordPicture
+PictureGraph i = Graph i PictureStubLabel PictureEdgeLabel WordPicture
 
 export
 enclosePicture : {i:Nat} -> PictureGraph 1 -> PictureGraph i -> PictureGraph (S i)
@@ -136,3 +136,38 @@ enclosePicture {i} a b = case (graphUnion a b') of
         MkGraph (r::r'::rs) ns es => MkGraph (r::rs) ns (es ++ map (\n => MkEdge r n Around Inside ()) (filter (>= r') $ map fst $ toList $ ns))
     where b' : PictureGraph (1+i)
           b' = (\(MkGraph rs ns es) => MkGraph (0::rs) ns es) b
+
+export
+(Show k, Show v) => Show (SortedMap k v) where
+    showPrec d m = showCon d "fromList" $ showArg (toList m)
+
+export
+(Show s) => Show (Edge s e) where
+    show (MkEdge n0 n1 s0 s1 e) = show n0 ++ "." ++ show s0 ++ "--" ++ show n1 ++ "." ++ show s1
+
+export
+(Show s, Show n) => Show (Graph i s e n) where
+    showPrec d (MkGraph rs ns es) = showCon d "MkGraph" $ showArg rs ++ showArg ns ++ showArg es
+
+export
+Show PictureStubLabel where
+    show FreeStub = "F"
+    show SeFreeStub = "f"
+    show (NumberedStub n) = show n
+    show Inside = "i"
+    show Around = "I"
+    show Around' = "I'"
+    show SeltauStub = "st"
+    show TertauStub = "tt"
+
+export
+Show WordPicture where
+    show w = string w
+
+export
+Show Angle where
+    show (Ang c s) = (++"°") $ show $ the Int $ cast $ atan2 s c / pi * 180
+
+export
+Show Position where
+    showPrec d (MkPosition p a) = showCon d "MkPosition" $ showArg p ++ showArg a
