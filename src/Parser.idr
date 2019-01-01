@@ -1,5 +1,6 @@
 module Parser
 
+import Picture
 import Graph
 import ParserUtils
 import PreParser
@@ -26,13 +27,13 @@ findWordPicture w = case getWordRecord w of
 
 -- junction to indicate multiple nodes in the same place
 confluencePicture : PictureGraph 1
-confluencePicture = pure $ MkWordPicture "" $ \_, s => case s of
+confluencePicture = pure $ MkWordPicture "." blankPicture $ \_, s => case s of
     NumberedStub    Z  => Just $ MkPosition [0,0] neutral
     NumberedStub (S Z) => Just $ MkPosition [0,0] back
     _ => Nothing
 
 quantifierPicture : PictureGraph 1
-quantifierPicture = pure $ MkWordPicture "│├" $ \_, s => case s of
+quantifierPicture = pure $ MkWordPicture "│├" blankPicture $ \_, s => case s of
     NumberedStub       Z   => Just $ MkPosition [0, 0.5] neutral
     NumberedStub    (S Z)  => Just $ MkPosition [0,-0.5] back
     NumberedStub (S (S Z)) => Just $ MkPosition [0.2,0] right
@@ -40,7 +41,7 @@ quantifierPicture = pure $ MkWordPicture "│├" $ \_, s => case s of
 
 -- sort of like CU, a circle enclosing the main selbri of a sentence.
 bridiCircle : PictureGraph 1
-bridiCircle = pure $ MkWordPicture "○" $ \_, s => case s of
+bridiCircle = pure $ MkWordPicture "○" blankPicture $ \_, s => case s of
     NumberedStub Z => Just $ MkPosition [0,1] neutral
     _ => Nothing
 

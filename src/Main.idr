@@ -24,4 +24,4 @@ main = do putStr "Enter a lojban text:\n>"
           let picture = words >>= addErr "parser error:\n" . runParser wholeText
           case picture of
               Left err => putStrLn err
-              Right gr => renderPicture gr
+              Right gr => renderPictureGraph gr

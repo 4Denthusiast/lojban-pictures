@@ -148,26 +148,3 @@ export
 export
 (Show s, Show n) => Show (Graph i s e n) where
     showPrec d (MkGraph rs ns es) = showCon d "MkGraph" $ showArg rs ++ showArg ns ++ showArg es
-
-export
-Show PictureStubLabel where
-    show FreeStub = "F"
-    show SeFreeStub = "f"
-    show (NumberedStub n) = show n
-    show Inside = "i"
-    show Around = "I"
-    show Around' = "I'"
-    show SeltauStub = "st"
-    show TertauStub = "tt"
-
-export
-Show WordPicture where
-    show w = string w
-
-export
-Show Angle where
-    show (Ang c s) = (++"°") $ show $ the Int $ cast $ atan2 s c / pi * 180
-
-export
-Show Position where
-    showPrec d (MkPosition p a) = showCon d "MkPosition" $ showArg p ++ showArg a
