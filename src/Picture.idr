@@ -118,12 +118,12 @@ blankPicture : Picture
 blankPicture = Pictures []
 
 transformToInt : Transform -> Vect 2 Double -> Vect 2 Int
-transformToInt t = map cast . applyTransform t
+transformToInt t = liftA2 (*) [1,-1] . map (cast . (+0.5)) . applyTransform t
 
 draw : Transform -> SDLRenderer -> SDLFont -> Picture -> IO ()
 draw t rend font (Dot p) = let
         [x,y] = transformToInt t p
-    in sdlPixel rend x y 0 0 0 255
+    in filledRect rend (x-1) (y-1) (x+1) (y+1) 0 0 0 255
 draw t rend font (Line e0 e1) = let
         [x0,y0] = transformToInt t e0
         [x1,y1] = transformToInt t e1

@@ -76,7 +76,7 @@ renderPicture : Picture -> IO ()
 renderPicture p = do
         (ctx, rend) <- startSDL "Pretty lojban" 600 600
         font <- ttfOpenFont "/usr/share/fonts/truetype/freefont/FreeSans.ttf" 15
-        loop rend font True (MkTransform (MkPosition [300,300] neutral) 20)
+        loop rend font True (MkTransform (MkPosition [300,-300] neutral) 20)
         ttfCloseFont font
         endSDL ctx rend
     where updateState : Transform -> Event -> Transform

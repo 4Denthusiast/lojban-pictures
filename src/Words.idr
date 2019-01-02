@@ -347,7 +347,7 @@ cmavruiStubPositions _ SeFreeStub = Just $ MkPosition [0,0] back
 cmavruiStubPositions _ _ = Nothing
 
 brodaStubPositions : StubPositions
-brodaStubPositions _ (NumberedStub n) = let a = angle (cast n * pi * (sqrt 5 - 1)) in Just $ rotatePosition a $ MkPosition [0,1] neutral
+brodaStubPositions _ (NumberedStub n) = let a = angle (cast n * pi * (1 - sqrt 5)) in Just $ rotatePosition a $ MkPosition [0,1.3] neutral
 brodaStubPositions _ _ = Nothing
 
 defaultBrivlaStubPositions : StubPositions
@@ -388,15 +388,47 @@ partial
 partialId : List a -> List a
 partialId (x::xs) = (x::xs)
 
+namespace pictureLib
+    KOhAleft : Picture
+    KOhAleft = Bezier [[0,0],[0,-1],[-1,0],[0,0]]
+    
+    KOhA3_1st : Picture
+    KOhA3_1st = Line [-0.2,0] [-0.2,0.4]
+    
+    KOhA3_2nd : Picture
+    KOhA3_2nd = Line [-0.375,-0.375] [-0.6,-0.6]
+    
+    KOhA3_3rd : Picture
+    KOhA3_3rd = Line [0,-0.2] [0.4,-0.2]
+    
+    lo : Picture
+    lo = Bezier [[0,-1],[-0.7,-0.3],[-0.7,0.5],[0,0.5]]
+     <+> Bezier [[0,-1],[ 0.7,-0.3],[ 0.7,0.5],[0,0.5]] --Bezier [[0,-1],[-1,1],[1,1],[0,-1]]
+    
+    le : Picture
+    le = lo <+> Dot [0,0]
+    
+    brodV : Picture
+    brodV = Bezier [[0,1],[4/3,1],[4/3,-1],[0,-1]]
+        <+> Bezier [[-0.5,sqrt(3/4)],[-1.3,0.3],[-1,-1],[0,-1]]
+        <+> Line [0,1] [0,-0.3]
+
 wordRecords : SortedMap String WordRecord
 wordRecords = foldr (\w, t => insert (string w) w t) empty $ partialId [
         makeWordRecord  A    "a",
         makeWordRecord  BU   "bu",
+        makeWordRecord  FA   "fa",
+        makeWordRecord  FA   "fe",
+        makeWordRecord  FA   "fi",
+        makeWordRecord  FA   "fo",
+        makeWordRecord  FA   "fu",
         makeWordRecord' I    "i" $ Line [-0.5,0] [0.5,0],
         makeWordRecord  KU   "ku",
-        makeWordRecord  LE   "le",
-        makeWordRecord' LE   "lo" $ Bezier [[0,-1],[-1,1],[1,1],[0,-1]],
-        makeWordRecord  KOhA "mi",
+        makeWordRecord' LE   "le" $ le,
+        makeWordRecord' LE   "lo" $ lo,
+        makeWordRecord' KOhA "mi" $ KOhAleft <+> KOhA3_1st,
+        makeWordRecord' KOhA "do" $ KOhAleft <+> KOhA3_2nd,
+        makeWordRecord' KOhA "mi'o" $ KOhAleft <+> KOhA3_1st <+> KOhA3_2nd,
         makeWordRecord  NAI  "nai",
         makeWordRecord  NA   "na",
         makeWordRecord' NIhO "ni'o" $
@@ -406,7 +438,7 @@ wordRecords = foldr (\w, t => insert (string w) w t) empty $ partialId [
         makeWordRecord  NIhO "no'i",
         makeWordRecord  Y    "y",
         makeWordRecord  ZOI  "zoi",
-        MkWordRecord Brivla "broda" $ MkWordPicture "broda" (Text "broda") brodaStubPositions
+        MkWordRecord Brivla "broda" $ MkWordPicture "broda" brodV brodaStubPositions
     ]
 
 tryMaybe : Maybe a -> Lazy (Maybe a) -> Maybe a
