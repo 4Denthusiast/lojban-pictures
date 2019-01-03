@@ -281,8 +281,8 @@ implementation Ord PictureStubLabel where
     compare s s' = compare (pictureStubNumeral s) (pictureStubNumeral s')
 
 public export
-PictureEdgeLabel : PictureStubLabel -> PictureStubLabel -> Type
-PictureEdgeLabel _ _ = ()
+PictureEdgeLabel : Type
+PictureEdgeLabel = (PictureStubLabel, PictureStubLabel)
 
 public export
 StubPositions : Type

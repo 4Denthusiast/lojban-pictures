@@ -47,7 +47,7 @@ bridiCircle = pure $ MkWordPicture "○" blankPicture $ \_, s => case s of
 
 createNi'os : Nat -> WordParser 1
 createNi'os Z = findWordPicture "i"
-createNi'os (S n) = (\ni'o => join $ uproot {i'=1} $ lineGraph (NumberedStub 3) (NumberedStub 4) () $ replicate (S n) ni'o) <$> findWordPicture "ni'o"
+createNi'os (S n) = (\ni'o => join $ uproot {i'=1} $ lineGraph (NumberedStub 3,NumberedStub 4) $ replicate (S n) ni'o) <$> findWordPicture "ni'o"
 
 -- For each term, a record of how it relates to the place structure
 data TagType = MiscTag | PlainTag | FaTag Nat | NaTag
@@ -69,16 +69,16 @@ faTagType = faTagType' . getRoot 0
 pictureTaggedStarGraph : {n:Nat} -> PictureGraph (S n) -> List (Nat, Nat, PictureGraph 1) -> PictureGraph (S n)
 pictureTaggedStarGraph = foldr addLeaf
     where addLeaf : {n:Nat} -> (Nat, Nat, PictureGraph 1) -> PictureGraph (S n) -> PictureGraph (S n)
-          addLeaf {n} (a,b,l) r = permuteRoots init $ replace {P=PictureGraph} (plusCommutative (S n) 1) $ addEdge 0 last (NumberedStub a) (NumberedStub b) () $ graphUnion r l
+          addLeaf {n} (a,b,l) r = permuteRoots init $ replace {P=PictureGraph} (plusCommutative (S n) 1) $ addEdge 0 last (NumberedStub a,NumberedStub b) $ graphUnion r l
 
 freeJoin : PictureGraph 1 -> PictureGraph 1 -> PictureGraph 1
-freeJoin x f = uproot {i=2} $ addEdge 0 1 FreeStub SeFreeStub () $ graphUnion x f
+freeJoin x f = uproot {i=2} $ addEdge 0 1 (FreeStub,SeFreeStub) $ graphUnion x f
 
 tanruJoin : PictureGraph 1 -> PictureGraph 1 -> PictureGraph 1
-tanruJoin s0 s1 = uproot {i=2} $ addEdge 1 0 TertauStub SeltauStub () $ graphUnion s1 s0
+tanruJoin s0 s1 = uproot {i=2} $ addEdge 1 0 (TertauStub,SeltauStub) $ graphUnion s1 s0
 
 relativeClauseJoin : PictureGraph 1 -> PictureGraph 2 -> PictureGraph 1
-relativeClauseJoin m r = uproot {i=3} $ addEdge 1 2 (NumberedStub 1) (NumberedStub 0) () $ graphUnion r m
+relativeClauseJoin m r = uproot {i=3} $ addEdge 1 2 (NumberedStub 1,NumberedStub 0) $ graphUnion r m
 
 maybeRelativeClauseJoin : PictureGraph 1 -> Maybe (PictureGraph 2) -> PictureGraph 1
 maybeRelativeClauseJoin m (Just r) = relativeClauseJoin m r
@@ -116,18 +116,18 @@ mutual
     wholeText = (<?> "whole text") $ text <* eof
     
     withFree : WordParser 1 -> WordParser 1
-    withFree p = join <$> (starGraph FreeStub SeFreeStub () <$> p <*> many free)
+    withFree p = join <$> (starGraph (FreeStub,SeFreeStub) <$> p <*> many free)
     
     -- TODO: allow superfluous "I", as in the reference grammar.
     text : WordParser 0
     text = (<?> "text") $ foldr (liftA2 (<+>)) (pure neutral) $ the (List _) [nais, cmeneOrFrees, emptyOnFail joikJek, emptyOnFail text1]
-        where nais = emptyOnFail $ map join $ lineGraph' FreeStub SeFreeStub () <$> someWithNonempty (bySelma'o NAI)
-              cmeneOrFrees = uproot <$> withFree (join <$> lineGraph' (NumberedStub 1) (NumberedStub 2) () <$> someWithNonempty (bySelma'o Cmevla)) <|> frees <|> ((<+>) <$> (uproot <$> indicators) <*> frees)
+        where nais = emptyOnFail $ map join $ lineGraph' (FreeStub,SeFreeStub) <$> someWithNonempty (bySelma'o NAI)
+              cmeneOrFrees = uproot <$> withFree (join <$> lineGraph' (NumberedStub 1,NumberedStub 2) <$> someWithNonempty (bySelma'o Cmevla)) <|> frees <|> ((<+>) <$> (uproot <$> indicators) <*> frees)
               frees : WordParser 0
               frees = foldr (<+>) neutral <$> (map uproot <$> many free)
               emptyOnFail p = fromMaybe neutral <$> opt (uproot <$> p)
-              lineGraph' : {edgeType : stubType -> stubType -> Type} -> (a:stubType) -> (b:stubType) -> edgeType a b -> (l:List nodeType ** NonEmpty l) -> Graph 1 stubType edgeType nodeType
-              lineGraph' x y e (ns**ok) = uproot $ lineGraph x y e ns {ok}
+              lineGraph' : edgeType -> (l:List nodeType ** NonEmpty l) -> Graph 1 edgeType nodeType
+              lineGraph' e (ns**ok) = uproot $ lineGraph e ns {ok}
               someWithNonempty : Monad m => ParserT str m a -> ParserT str m (l:List a ** NonEmpty l)
               someWithNonempty p = (\(x::xs) => ((x::xs)**IsNonEmpty)) <$> some p
     
@@ -199,7 +199,7 @@ mutual
         fs <- many free
         t <- lazy text1
         fe <- fromMaybe [] <$> opt (bySelma'o TUhU *> many free)
-        pure $ join $ (starGraph FreeStub SeFreeStub () t (fs ++ fe))
+        pure $ join $ (starGraph (FreeStub,SeFreeStub) t (fs ++ fe))
     
     fragment : WordParser 1
     fragment = (<?> "fragment") $
@@ -302,7 +302,7 @@ mutual
         <|> (\q, s => pictureTaggedStarGraph quantifierPicture [(1,0,s),(2,0,q)]) <$> quantifier <*> lazy sumti
     
     relativeClauses : WordParser 2
-    relativeClauses = chainl1 (permuteRoots (\[r] => [r,r]) <$> relativeClause) $ bySelma'o ZIhE *> pure (\r0, r1 => permuteRoots (\[s,i,i',e] => [s,e]) $ addEdge 1 2 (NumberedStub 1) (NumberedStub 0) () $ graphUnion r0 r1)
+    relativeClauses = chainl1 (permuteRoots (\[r] => [r,r]) <$> relativeClause) $ bySelma'o ZIhE *> pure (\r0, r1 => permuteRoots (\[s,i,i',e] => [s,e]) $ addEdge 1 2 (NumberedStub 1,NumberedStub 0) $ graphUnion r0 r1)
     
     relativeClause : WordParser 1
     relativeClause =
@@ -436,7 +436,7 @@ mutual
     
     tenseModal : WordParser 1
     tenseModal = withFree simpleTenseModal <|>
-        (\f, s => permuteRoots (\[r0,r1] => [r0]) $ addEdge 0 1 (NumberedStub 2) (NumberedStub 0) () $ enclosePicture f s) <$> withFree (bySelma'o FIhO) <*> selbri2 <* opt (bySelma'o FEhU)
+        (\f, s => permuteRoots (\[r0,r1] => [r0]) $ addEdge 0 1 (NumberedStub 2,NumberedStub 0) $ enclosePicture f s) <$> withFree (bySelma'o FIhO) <*> selbri2 <* opt (bySelma'o FEhU)
     
     simpleTenseModal : WordParser 1
     simpleTenseModal = fail "simple-tense-modal not yet implemented."

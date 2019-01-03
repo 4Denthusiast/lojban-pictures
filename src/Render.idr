@@ -36,20 +36,20 @@ stubPosition : PictureStubLabel -> WordPicture' -> Maybe Position
 stubPosition s (w, ss) = stubs w ss s
 
 annotatePictureGraph :
-    Graph 0 PictureStubLabel PictureEdgeLabel WordPicture ->
-    Graph 0 PictureStubLabel PictureEdgeLabel WordPicture'
+    Graph 0 PictureEdgeLabel WordPicture ->
+    Graph 0 PictureEdgeLabel WordPicture'
 annotatePictureGraph (MkGraph [] ns es) = MkGraph [] (foldr annotate (map (\n => (n,[])) ns) es) es
     where annotate' : NodeLabel -> PictureStubLabel -> SortedMap NodeLabel WordPicture' -> SortedMap NodeLabel WordPicture'
           annotate' l s ns' = adjust (\(n,ss) => (n,s::ss)) l ns'
-          annotate (MkEdge n0 n1 s0 s1 _) ns' = annotate' n0 s0 $ annotate' n1 s1 ns'
+          annotate (MkEdge n0 n1 (s0,s1)) ns' = annotate' n0 s0 $ annotate' n1 s1 ns'
 
-arrangePictureGraph : Graph 0 PictureStubLabel PictureEdgeLabel WordPicture' -> Graph 0 PictureStubLabel PictureEdgeLabel (WordPicture', Position)
+arrangePictureGraph : Graph 0 PictureEdgeLabel WordPicture' -> Graph 0 PictureEdgeLabel (WordPicture', Position)
 arrangePictureGraph (MkGraph [] ns es) = MkGraph [] (map snd $ foldr alignEdge ns'0 es) es
     where ns'0 = mapWithKeys (\l, n => (l, n, neutral)) ns
-          alignEdge : Edge PictureStubLabel PictureEdgeLabel ->
+          alignEdge : Edge PictureEdgeLabel ->
               SortedMap NodeLabel (NodeLabel, WordPicture', Position) ->
               SortedMap NodeLabel (NodeLabel, WordPicture', Position)
-          alignEdge (MkEdge nl0 nl1 s0 s1 e) ns' =
+          alignEdge (MkEdge nl0 nl1 (s0,s1)) ns' =
               --trace ("nodes: "++show ns') $
               --trace ("aligning "++show (MkEdge nl0 nl1 s0 s1 e)) $
               let [Just (r0, n0, p0), Just (r1, n1, p1)] = map {f=Vect 2} (flip lookup ns') [nl0, nl1] in
@@ -64,8 +64,8 @@ drawLink : Maybe Position -> Maybe Position -> PictureStubLabel -> PictureStubLa
 drawLink (Just (MkPosition p0 a0)) (Just (MkPosition p1 a1)) s0 s1 = Line p0 p1
 drawLink _ _ _ _ = blankPicture
 
-graphToPicture : Graph 0 PictureStubLabel PictureEdgeLabel (WordPicture', Position) -> Picture
-graphToPicture gr = Pictures $ map (\(w, p) => Transformed (MkTransform p 1) $ picture (fst w)) (values $ graphNodes gr) ++ map (\(MkEdge n0 n1 s0 s1 e) => drawLink (findStubPos n0 s0) (findStubPos n1 s1) s0 s1) (graphEdges gr)
+graphToPicture : Graph 0 PictureEdgeLabel (WordPicture', Position) -> Picture
+graphToPicture gr = Pictures $ map (\(w, p) => Transformed (MkTransform p 1) $ picture (fst w)) (values $ graphNodes gr) ++ map (\(MkEdge n0 n1 (s0,s1)) => drawLink (findStubPos n0 s0) (findStubPos n1 s1) s0 s1) (graphEdges gr)
     where findStubPos : NodeLabel -> PictureStubLabel -> Maybe Position
           findStubPos l s = do
               (w, p) <- SortedMap.lookup l $ graphNodes gr
