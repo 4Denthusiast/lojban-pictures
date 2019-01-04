@@ -3,6 +3,7 @@ module Picture
 import Control.Algebra
 import public Control.Algebra.NumericImplementations
 import Data.Vect
+import Debug.Trace
 import Graphics.Color
 import Graphics.SDL2.SDL
 import Graphics.SDL2.SDLTTF
@@ -112,9 +113,12 @@ Group Transform where
 
 data ConvexHull = MkHull (List Point)
 
+Show ConvexHull where
+    showPrec d (MkHull ps) = showCon d "MkHull" $ showArg ps
+
 makeHull : List Point -> ConvexHull
 makeHull [] = MkHull []
-makeHull ps = MkHull $ foldl addPoint [] sorted
+makeHull ps = MkHull $ reverse $ foldl addPoint [] sorted
     where pivot : Point
           pivot = foldr1 max ps
           angleTo : Point -> Point -> Double
@@ -127,6 +131,8 @@ makeHull ps = MkHull $ foldl addPoint [] sorted
           addPoint [] p = [p]
           addPoint [ep] p = [p,ep]
           addPoint (ep::pp::h) p = if angleTo pp p > angleTo pp ep then p::ep::pp::h else p::pp::h
+          debug : List Point -> List Point
+          debug x = trace ("Making hull of "++show ps++"\n\tPivot: "++show pivot++"\n\tSorted: "++show sorted++"\n\tFinal: "++show x) x
 
 hullUnion : List ConvexHull -> ConvexHull
 hullUnion = makeHull . concatMap (\(MkHull ps) => ps)
@@ -143,7 +149,9 @@ upperSide (MkHull ps) =
         takeWhile' ((>0) . head . fst) $
         dropWhile (\([x,y],_) => x == 0 && y > 0) $
         dropWhile (<=([0,0],[0,0])) $
-        addDiffs (ps ++ ps)
+        dropWhile (>([0,0],[0,0])) $
+        --(\d => trace ("upperSide of "++show ps++"\n\tdiffs: "++show d) d) $
+        addDiffs (ps ++ ps ++ ps)
     where addDiffs : List Point -> List (Point, Point)
           addDiffs (x::x'::xs) = (x'<->x, x) :: addDiffs (x'::xs)
           addDiffs _ = []
@@ -192,7 +200,7 @@ pictureHull : Picture -> ConvexHull
 pictureHull (Dot p) = makeHull [p]
 pictureHull (Line p p') = makeHull [p,p']
 pictureHull (Bezier ps) = makeHull $ toList ps
-pictureHull (Text s) = makeHull [[0,0]] -- I don't have any good estimate for text's size.
+pictureHull (Text s) = let l = cast (length s) / 4 in makeHull [[-l,0],[0,l],[l,0],[0,-l]] -- I don't have any good estimate for text's size.
 pictureHull (Transformed t p) = transformHull t $ pictureHull p
 pictureHull (Pictures ps) = hullUnion $ map pictureHull ps
 

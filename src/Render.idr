@@ -3,6 +3,7 @@ module Render
 import Picture
 import Words
 import Graph
+import GraphSubstitution
 
 import Control.Algebra
 import Data.SortedMap
@@ -21,11 +22,6 @@ mapAccumL : (a -> b -> (a, c)) -> a -> List b -> (List c, a)
 mapAccumL f x [] = ([], x)
 mapAccumL f x (y::ys) = let (x', z) = f x y in let (zs, x'') = mapAccumL f x' ys in (z::zs, x'')
 
-adjust : (a -> a) -> k -> SortedMap k a -> SortedMap k a
-adjust f k m = case lookup k m of
-    Nothing => m
-    Just v  => insert k (f v) m
-
 mapWithKeys : Ord k => (k -> a -> b) -> SortedMap k a -> SortedMap k b
 mapWithKeys f = fromList . map (\(k,v) => (k, f k v)) . toList
 
@@ -35,42 +31,33 @@ WordPicture' = (WordPicture, List PictureStubLabel)
 stubPosition : PictureStubLabel -> WordPicture' -> Maybe Position
 stubPosition s (w, ss) = stubs w ss s
 
-annotatePictureGraph :
-    Graph 0 PictureEdgeLabel WordPicture ->
-    Graph 0 PictureEdgeLabel WordPicture'
-annotatePictureGraph (MkGraph [] ns es) = MkGraph [] (foldr annotate (map (\n => (n,[])) ns) es) es
-    where annotate' : NodeLabel -> PictureStubLabel -> SortedMap NodeLabel WordPicture' -> SortedMap NodeLabel WordPicture'
-          annotate' l s ns' = adjust (\(n,ss) => (n,s::ss)) l ns'
-          annotate (MkEdge n0 n1 (s0,s1)) ns' = annotate' n0 s0 $ annotate' n1 s1 ns'
+maybeRevEdge : Bool -> Edge (a,a) -> Edge (a,a)
+maybeRevEdge False (MkEdge n0 n1 (x,y)) = MkEdge n0 n1 (x,y)
+maybeRevEdge True  (MkEdge n0 n1 (x,y)) = MkEdge n1 n0 (y,x)
 
-arrangePictureGraph : Graph 0 PictureEdgeLabel WordPicture' -> Graph 0 PictureEdgeLabel (WordPicture', Position)
-arrangePictureGraph (MkGraph [] ns es) = MkGraph [] (map snd $ foldr alignEdge ns'0 es) es
-    where ns'0 = mapWithKeys (\l, n => (l, n, neutral)) ns
-          alignEdge : Edge PictureEdgeLabel ->
-              SortedMap NodeLabel (NodeLabel, WordPicture', Position) ->
-              SortedMap NodeLabel (NodeLabel, WordPicture', Position)
-          alignEdge (MkEdge nl0 nl1 (s0,s1)) ns' =
-              --trace ("nodes: "++show ns') $
-              --trace ("aligning "++show (MkEdge nl0 nl1 s0 s1 e)) $
-              let [Just (r0, n0, p0), Just (r1, n1, p1)] = map {f=Vect 2} (flip lookup ns') [nl0, nl1] in
-              --trace ("currently "++show nl0++"ϵ"++show r0++", "++show nl1++"ϵ"++show r1) $
-              case (stubPosition s0 n0, stubPosition s1 n1, r0 == r1) of
-                  (Just sp0, Just sp1, False) =>
-                      let dp = p0 <+> sp0 <+> (MkPosition [0,2] back) <-> sp1 <-> p1
-                      in map (\n' => if fst n' /= r1 then n' else case n' of (_, n2, p2) => (r0, n2, dp <+> p2)) ns'
-                  f => ns' --trace ("alignment failed: " <+> show f) ns'
+absorbLeaf : NodeLabel -> SGraph PictureEdgeLabel WordPicture -> SGraph PictureEdgeLabel WordPicture
+absorbLeaf nl (MkSGraph ns es) = fromMaybe (MkSGraph ns es) $ do
+    (leafPic, leafStubs) <- lookup nl ns
+    [(eRev, eLab)] <- the (Maybe (List (Bool,EdgeLabel))) $ case leafStubs of {[_] => Just leafStubs; _ => Nothing}
+    MkEdge pl _ (pStub,lStub) <- maybeRevEdge eRev <$> lookup eLab es
+    (pPic, pStubs) <- lookup pl ns
+    pStubs' <- traverse (\(r,el) => (\(MkEdge _ _ (_,s)) => s) <$> maybeRevEdge r <$> lookup el es) pStubs
+    let lPic = (\pPos, lPos => Transformed (MkTransform pPos 1) $ (Line [0,0] [0,2]) <+> Transformed (MkTransform (MkPosition [0,2] back <-> lPos) 1) (picture leafPic)) <$> stubs pPic pStubs' pStub <*> stubs leafPic [lStub] lStub
+    pure $ case lPic of
+        Just lPic' => MkSGraph (insert pl (record {picture $= (<+> lPic'), stubs $= (.(pStub::))} pPic, delete (not eRev, eLab) pStubs) $ delete nl ns) (delete eLab es)
+        Nothing => MkSGraph ns (delete eLab es)
 
-drawLink : Maybe Position -> Maybe Position -> PictureStubLabel -> PictureStubLabel -> Picture
-drawLink (Just (MkPosition p0 a0)) (Just (MkPosition p1 a1)) s0 s1 = Line p0 p1
-drawLink _ _ _ _ = blankPicture
+absorbLeaves : SGraph PictureEdgeLabel WordPicture -> List Picture
+absorbLeaves (MkSGraph ns es) = let (MkSGraph ns' es') = foldr absorbLeaf (MkSGraph ns es) (keys ns) in
+    if length (keys ns') + length (keys es') == length (keys ns) + length (keys es)
+        then map (picture . fst) $ values ns'
+        else absorbLeaves (MkSGraph ns' es')
 
-graphToPicture : Graph 0 PictureEdgeLabel (WordPicture', Position) -> Picture
-graphToPicture gr = Pictures $ map (\(w, p) => Transformed (MkTransform p 1) $ picture (fst w)) (values $ graphNodes gr) ++ map (\(MkEdge n0 n1 (s0,s1)) => drawLink (findStubPos n0 s0) (findStubPos n1 s1) s0 s1) (graphEdges gr)
-    where findStubPos : NodeLabel -> PictureStubLabel -> Maybe Position
-          findStubPos l s = do
-              (w, p) <- SortedMap.lookup l $ graphNodes gr
-              sp0 <- stubPosition s w
-              pure $ p <+> sp0
+combinePicturesWithoutOverlap : Picture -> Picture -> Picture
+combinePicturesWithoutOverlap p0 p1 = p0 <+> Transformed t p1 
+    where dy : Double
+          dy = max 0 $ minShiftToDisjoint (pictureHull p0) (pictureHull p1)
+          t = translateTransform 0 (-dy)
 
 renderPicture : Picture -> IO ()
 renderPicture p = do
@@ -101,4 +88,4 @@ renderPicture p = do
 
 export
 renderPictureGraph : PictureGraph 0 -> IO ()
-renderPictureGraph = renderPicture . graphToPicture . arrangePictureGraph . annotatePictureGraph
+renderPictureGraph = renderPicture . foldr combinePicturesWithoutOverlap blankPicture . (\ps => trace ("fragments: "++show (length ps)) ps) . absorbLeaves . convertGraph
