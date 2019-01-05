@@ -286,14 +286,29 @@ PictureEdgeLabel = (PictureStubLabel, PictureStubLabel)
 
 public export
 StubPositions : Type
-StubPositions = List PictureStubLabel -> PictureStubLabel -> Maybe Position
+StubPositions = PictureStubLabel -> Maybe Position
 
 public export
-record WordPicture where
+record WordPicture' where
     constructor MkWordPicture
     string : String
     picture : Picture
     stubs : StubPositions
+
+public export
+record WordContext where
+    constructor MkWordContext
+    aroundShape : ConvexHull
+    aroundShape' : ConvexHull
+    stubs : List PictureStubLabel
+
+public export
+emptyContext : List PictureStubLabel -> WordContext
+emptyContext = MkWordContext emptyHull emptyHull
+
+public export
+WordPicture : Type
+WordPicture = WordContext -> WordPicture'
 
 public export
 record WordRecord where
@@ -314,51 +329,51 @@ wordSelma'o _ = KOhA --The other magic word things are all sumti
 
 -- terminators, Y
 emptyStubPositions : StubPositions
-emptyStubPositions _ _ = Nothing
+emptyStubPositions _ = Nothing
 
 cmavrxavoStubPositions : StubPositions
-cmavrxavoStubPositions _ (NumberedStub       Z  ) = Just $ MkPosition [ 0  , 0.5] neutral
-cmavrxavoStubPositions _ (NumberedStub    (S Z) ) = Just $ MkPosition [ 0.5,-0.5] back
-cmavrxavoStubPositions _ (NumberedStub (S (S Z))) = Just $ MkPosition [-0.5,-0.5] back
-cmavrxavoStubPositions _ _ = Nothing
+cmavrxavoStubPositions (NumberedStub       Z  ) = Just $ MkPosition [ 0  , 0.5] neutral
+cmavrxavoStubPositions (NumberedStub    (S Z) ) = Just $ MkPosition [ 0.5,-0.5] back
+cmavrxavoStubPositions (NumberedStub (S (S Z))) = Just $ MkPosition [-0.5,-0.5] back
+cmavrxavoStubPositions _ = Nothing
 
 cmavrxivoStubPositions : StubPositions
-cmavrxivoStubPositions _ (NumberedStub       Z  ) = Just $ MkPosition [-0.5,0] left
-cmavrxivoStubPositions _ (NumberedStub    (S Z) ) = Just $ MkPosition [ 0.5,0] right
-cmavrxivoStubPositions _ (NumberedStub (S (S Z))) = Just $ MkPosition [ 0  ,0] back
-cmavrxivoStubPositions _ _ = Nothing
+cmavrxivoStubPositions (NumberedStub       Z  ) = Just $ MkPosition [-0.5,0] left
+cmavrxivoStubPositions (NumberedStub    (S Z) ) = Just $ MkPosition [ 0.5,0] right
+cmavrxivoStubPositions (NumberedStub (S (S Z))) = Just $ MkPosition [ 0  ,0] back
+cmavrxivoStubPositions _ = Nothing
 
 cmavrko'aStubPositions : StubPositions
-cmavrko'aStubPositions _ (NumberedStub Z) = Just $ MkPosition [0,0] neutral
-cmavrko'aStubPositions _ _ = Nothing
+cmavrko'aStubPositions (NumberedStub Z) = Just $ MkPosition [0,0] neutral
+cmavrko'aStubPositions _ = Nothing
 
 cmavrleStubPositions : StubPositions
-cmavrleStubPositions _ (NumberedStub    Z ) = Just $ MkPosition [0,0.5] neutral
-cmavrleStubPositions _ (NumberedStub (S Z)) = Just $ MkPosition [0,-1 ] back
-cmavrleStubPositions _ _ = Nothing
+cmavrleStubPositions (NumberedStub    Z ) = Just $ MkPosition [0,0.5] neutral
+cmavrleStubPositions (NumberedStub (S Z)) = Just $ MkPosition [0,-1 ] back
+cmavrleStubPositions _ = Nothing
 
 cmavrpaStubPositions : StubPositions
-cmavrpaStubPositions _ (NumberedStub    Z ) = Just $ MkPosition [ 0.5,0] right
-cmavrpaStubPositions _ (NumberedStub (S Z)) = Just $ MkPosition [-0.5,0] left
-cmavrpaStubPositions _ _ = Nothing
+cmavrpaStubPositions (NumberedStub    Z ) = Just $ MkPosition [ 0.5,0] right
+cmavrpaStubPositions (NumberedStub (S Z)) = Just $ MkPosition [-0.5,0] left
+cmavrpaStubPositions _ = Nothing
 
 cmavruiStubPositions : StubPositions
-cmavruiStubPositions _ SeFreeStub = Just $ MkPosition [0,0] back
-cmavruiStubPositions _ _ = Nothing
+cmavruiStubPositions SeFreeStub = Just $ MkPosition [0,0] back
+cmavruiStubPositions _ = Nothing
 
 brodaStubPositions : StubPositions
-brodaStubPositions _ (NumberedStub n) = let a = angle (cast n * pi * (1 - sqrt 5)) in Just $ rotatePosition a $ MkPosition [0,1.3] neutral
-brodaStubPositions _ _ = Nothing
+brodaStubPositions (NumberedStub n) = let a = angle (cast n * pi * (1 - sqrt 5)) in Just $ rotatePosition a $ MkPosition [0,1.3] neutral
+brodaStubPositions _ = Nothing
 
 defaultBrivlaStubPositions : StubPositions
-defaultBrivlaStubPositions _ (NumberedStub n) = let a = angle (cast n * pi * 2/5) in Just $ rotatePosition a $ MkPosition [0,1] neutral
-defaultBrivlaStubPositions _ _ = Nothing
+defaultBrivlaStubPositions (NumberedStub n) = let a = angle (cast n * pi * 2/5) in Just $ rotatePosition a $ MkPosition [0,1] neutral
+defaultBrivlaStubPositions _ = Nothing
 
 cmevlaStubPositions : StubPositions
-cmevlaStubPositions _ (NumberedStub       Z  ) = Just $ MkPosition [0, 1] neutral
-cmevlaStubPositions _ (NumberedStub    (S Z) ) = Just $ MkPosition [0,-1] back
-cmevlaStubPositions _ (NumberedStub (S (S Z))) = Just $ MkPosition [0, 1] neutral
-cmevlaStubPositions _ _ = Nothing
+cmevlaStubPositions (NumberedStub       Z  ) = Just $ MkPosition [0, 1] neutral
+cmevlaStubPositions (NumberedStub    (S Z) ) = Just $ MkPosition [0,-1] back
+cmevlaStubPositions (NumberedStub (S (S Z))) = Just $ MkPosition [0, 1] neutral
+cmevlaStubPositions _ = Nothing
 
 stubPositionsBySelma'o : Selma'o -> StubPositions
 stubPositionsBySelma'o A    = cmavrxavoStubPositions
@@ -377,11 +392,11 @@ stubPositionsBySelma'o Cmevla = cmevlaStubPositions
 
 export
 makeWordRecord : Selma'o -> String -> WordRecord
-makeWordRecord sm s = MkWordRecord sm s $ MkWordPicture s (Text s) (stubPositionsBySelma'o sm)
+makeWordRecord sm s = MkWordRecord sm s $ const $ MkWordPicture s (Text s) (stubPositionsBySelma'o sm)
 
 export
 makeWordRecord' : Selma'o -> String -> Picture -> WordRecord
-makeWordRecord' sm s p = MkWordRecord sm s $ MkWordPicture s p (stubPositionsBySelma'o sm)
+makeWordRecord' sm s p = MkWordRecord sm s $ const $ MkWordPicture s p (stubPositionsBySelma'o sm)
 
 -- force the compiler to not expand an expression
 partial
@@ -390,16 +405,16 @@ partialId (x::xs) = (x::xs)
 
 namespace pictureLib
     KOhAleft : Picture
-    KOhAleft = Bezier [[0,0],[0,-1],[-1,0],[0,0]]
+    KOhAleft = Bezier [[0,0],[0,-1.5],[-1.5,0],[0,0]]
     
     KOhA3_1st : Picture
-    KOhA3_1st = Line [-0.2,0] [-0.2,0.4]
+    KOhA3_1st = Line [-0.3,0] [-0.3,0.5]
     
     KOhA3_2nd : Picture
-    KOhA3_2nd = Line [-0.375,-0.375] [-0.6,-0.6]
+    KOhA3_2nd = Line [-0.5625,-0.5625] [-0.9,-0.9]
     
     KOhA3_3rd : Picture
-    KOhA3_3rd = Line [0,-0.2] [0.4,-0.2]
+    KOhA3_3rd = Line [0,-0.3] [0.5,-0.3]
     
     lo : Picture
     lo = Bezier [[0,-1],[-0.7,-0.3],[-0.7,0.5],[0,0.5]]
@@ -429,6 +444,7 @@ wordRecords = foldr (\w, t => insert (string w) w t) empty $ partialId [
         makeWordRecord' KOhA "mi" $ KOhAleft <+> KOhA3_1st,
         makeWordRecord' KOhA "do" $ KOhAleft <+> KOhA3_2nd,
         makeWordRecord' KOhA "mi'o" $ KOhAleft <+> KOhA3_1st <+> KOhA3_2nd,
+        makeWordRecord' KOhA "ma'a" $ KOhAleft <+> KOhA3_1st <+> KOhA3_2nd <+> KOhA3_3rd,
         makeWordRecord  NAI  "nai",
         makeWordRecord  NA   "na",
         makeWordRecord' NIhO "ni'o" $
@@ -438,7 +454,7 @@ wordRecords = foldr (\w, t => insert (string w) w t) empty $ partialId [
         makeWordRecord  NIhO "no'i",
         makeWordRecord  Y    "y",
         makeWordRecord  ZOI  "zoi",
-        MkWordRecord Brivla "broda" $ MkWordPicture "broda" brodV brodaStubPositions
+        MkWordRecord Brivla "broda" $ const $ MkWordPicture "broda" brodV brodaStubPositions
     ]
 
 tryMaybe : Maybe a -> Lazy (Maybe a) -> Maybe a
@@ -463,4 +479,4 @@ Show PictureStubLabel where
 
 export
 Show WordPicture where
-    show w = string w
+    show w = string $ w (emptyContext [])

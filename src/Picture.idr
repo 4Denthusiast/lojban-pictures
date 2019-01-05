@@ -96,11 +96,14 @@ scalePosition s (MkPosition p a) = MkPosition ((s*) <$> p) a
 applyTransform : Transform -> Point -> Point
 applyTransform (MkTransform (MkPosition p a) s) = (<+>) p . rotate a . map (s*)
 
-translateTransform : Double -> Double -> Transform
-translateTransform x y = MkTransform (MkPosition [x,y] neutral) 1
+translateTransform : Point -> Transform
+translateTransform [x,y] = MkTransform (MkPosition [x,y] neutral) 1
 
 rotateTransform : Angle -> Transform
 rotateTransform a = MkTransform (MkPosition neutral a) 1
+
+scaleTransform : Double -> Transform
+scaleTransform s = MkTransform neutral s
 
 Semigroup Transform where
     (<+>) (MkTransform p s) (MkTransform p' s') = MkTransform (p <+> scalePosition s p') (s*s')
@@ -133,6 +136,9 @@ makeHull ps = MkHull $ reverse $ foldl addPoint [] sorted
           addPoint (ep::pp::h) p = if angleTo pp p > angleTo pp ep then p::ep::pp::h else p::pp::h
           debug : List Point -> List Point
           debug x = trace ("Making hull of "++show ps++"\n\tPivot: "++show pivot++"\n\tSorted: "++show sorted++"\n\tFinal: "++show x) x
+
+emptyHull : ConvexHull
+emptyHull = makeHull []
 
 hullUnion : List ConvexHull -> ConvexHull
 hullUnion = makeHull . concatMap (\(MkHull ps) => ps)
@@ -188,10 +194,58 @@ minShiftToDisjoint h0 h1 = minShift (lowerSide h0) (upperSide h1)
                   then minShift (p1::ps) (p0'::p1'::ps')
                   else minShift (p0::p1::ps) (p1'::ps')
 
+private
+hypot : Double -> Double -> Double
+hypot x y = sqrt $ x*x + y*y
+
+private
+diameter : Point -> Point -> (Point, Double)
+diameter p p' = ((/2) <$> (p <+> p'), (\[x,y] => 0.5 * hypot x y) $ p <-> p')
+
+private
+triangleCircumcircle : Point -> Point -> Point -> (Point, Double)
+triangleCircumcircle [ax,ay] [bx,by] [cx,cy] = ([px, py], hypot (ax-px) (ay-py))
+    where a2 : Double
+          b2 : Double
+          c2 : Double
+          d : Double
+          px : Double
+          py : Double
+          a2 = ay*ay+ax*ax
+          b2 = by*by+bx*bx
+          c2 = cy*cy+cx*cx
+          d = 2 * (ax*by + bx*cy + cx*ay - ay*bx - by*cx - cy*ax)
+          px = (a2*(by-cy)+b2*(cy-ay)+c2*(ay-by))/d
+          py = (a2*(cx-bx)+b2*(ax-cx)+c2*(bx-ax))/d
+
+export
+circumcircle : ConvexHull -> (Point, Double)
+circumcircle (MkHull []) = ([0,0],0) -- The position is arbitrary.
+circumcircle (MkHull [p]) = (p,0)
+circumcircle (MkHull [p,p']) = diameter p p'
+circumcircle (MkHull (p0::ps')) = twoPoint p1 p2
+    where ps : List Point
+          ps = p0::ps'
+          dist2 : Point -> Point -> Double
+          dist2 p p' = sum $ map (\c => c*c) $ p <-> p'
+          dot : Point -> Point -> Double
+          dot p p' = sum $ zipWith (*) p p'
+          minBy : Ord b => (Point -> b) -> Point
+          minBy f = snd $ foldr max (f p0, p0) (map (\p => (f p, p)) ps)
+          p1 = minBy (negate . dist2 p0)
+          p2 = minBy (\p => - dist2 p1 p / dot (p <-> p1) (p0 <-> p1))
+          twoPoint : Point -> Point -> (Point, Double)
+          twoPoint p p' = let p'' = minBy (\p'' => dot (p''<->p') (p''<->p) / sqrt (dist2 p'' p' * dist2 p'' p)) in
+              if dot (p''<->p') (p''<->p) <= 0 then diameter p p'
+              else if dot (p'<->p'') (p'<->p ) < 0 then twoPoint p'' p
+              else if dot (p <->p'') (p <->p') < 0 then twoPoint p'' p'
+              else triangleCircumcircle p p' p''
+
 data Picture : Type where
     Dot : Point -> Picture
     Line : Point -> Point -> Picture
     Bezier : Vect 4 Point -> Picture
+    Circle : Point -> Double -> Picture
     Text : String -> Picture
     Transformed : Transform -> Picture -> Picture
     Pictures : List Picture -> Picture
@@ -200,6 +254,8 @@ pictureHull : Picture -> ConvexHull
 pictureHull (Dot p) = makeHull [p]
 pictureHull (Line p p') = makeHull [p,p']
 pictureHull (Bezier ps) = makeHull $ toList ps
+pictureHull (Circle p r) = transformHull (MkTransform (MkPosition p neutral) (1/y)) $ makeHull $ [[1,0],[0.5,-y],[-0.5,-y],[-1,0],[-0.5,y],[0.5,y]]
+    where y = sqrt 3 / 2
 pictureHull (Text s) = let l = cast (length s) / 4 in makeHull [[-l,0],[0,l],[l,0],[0,-l]] -- I don't have any good estimate for text's size.
 pictureHull (Transformed t p) = transformHull t $ pictureHull p
 pictureHull (Pictures ps) = hullUnion $ map pictureHull ps
@@ -224,6 +280,10 @@ draw t rend font (Line e0 e1) = let
 draw t rend font (Bezier ps) = let
         [xs,ys] = map toList $ transpose $ map (transformToInt t) ps
     in sdlBezier rend xs ys 3 0 0 0 255
+draw t rend font (Circle c r) = let
+        [x,y] = transformToInt t c
+        r' = cast $ r * scale t
+    in sdlEllipse rend x y r' r' 0 0 0 255
 draw t rend font (Text s) = let
         [x,y] = transformToInt t [0,0]
     in renderTextSolid rend font s black x y

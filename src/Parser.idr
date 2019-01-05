@@ -6,6 +6,7 @@ import ParserUtils
 import PreParser
 import Words
 
+import Control.Algebra
 import Control.Monad.Identity
 import Data.Fin
 import Data.Vect
@@ -27,13 +28,13 @@ findWordPicture w = case getWordRecord w of
 
 -- junction to indicate multiple nodes in the same place
 confluencePicture : PictureGraph 1
-confluencePicture = pure $ MkWordPicture "." blankPicture $ \_, s => case s of
+confluencePicture = pure $ const $ MkWordPicture "." blankPicture $ \s => case s of
     NumberedStub    Z  => Just $ MkPosition [0,0] neutral
     NumberedStub (S Z) => Just $ MkPosition [0,0] back
     _ => Nothing
 
 quantifierPicture : PictureGraph 1
-quantifierPicture = pure $ MkWordPicture "│├" blankPicture $ \_, s => case s of
+quantifierPicture = pure $ const $ MkWordPicture "│├" blankPicture $ \s => case s of
     NumberedStub       Z   => Just $ MkPosition [0, 0.5] neutral
     NumberedStub    (S Z)  => Just $ MkPosition [0,-0.5] back
     NumberedStub (S (S Z)) => Just $ MkPosition [0.2,0] right
@@ -41,9 +42,11 @@ quantifierPicture = pure $ MkWordPicture "│├" blankPicture $ \_, s => case s
 
 -- sort of like CU, a circle enclosing the main selbri of a sentence.
 bridiCircle : PictureGraph 1
-bridiCircle = pure $ MkWordPicture "○" blankPicture $ \_, s => case s of
-    NumberedStub Z => Just $ MkPosition [0,1] neutral
-    _ => Nothing
+bridiCircle = pure $ (. circumcircle . aroundShape) $ \(c, r) =>
+    MkWordPicture "○" (Circle [0,0] (r+0.5)) $ \s => case s of
+        NumberedStub Z => Just $ MkPosition [0,r+0.5] neutral
+        Around => Just $ MkPosition (inverse c) neutral
+        _ => Nothing
 
 createNi'os : Nat -> WordParser 1
 createNi'os Z = findWordPicture "i"
@@ -58,7 +61,7 @@ Terms = List (TagType, Maybe (PictureGraph 1))
 -- The place corresponding to a given FA cmavo
 faTagType : PictureGraph 1 -> TagType
 faTagType = faTagType' . getRoot 0
-    where faTagType' f = FaTag $ case string f of
+    where faTagType' f = FaTag $ case string (f $ emptyContext []) of
               "fa" => 0
               "fe" => 1
               "fi" => 2
