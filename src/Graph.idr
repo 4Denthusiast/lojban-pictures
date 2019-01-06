@@ -9,12 +9,25 @@ public export
 NodeLabel : Type
 NodeLabel = Nat
 
+-- The graph representation is directed, but what I really want is an undirected graph, but with directed edge labels.
+public export
+interface Reversable t where
+    reverse : t -> t
+
 public export
 data Edge : (edgeType : Type) -> Type where
     MkEdge : NodeLabel ->
              NodeLabel ->
              edgeType ->
              Edge edgeType
+
+export
+Reversable e => Reversable (Edge e) where
+    reverse (MkEdge n0 n1 x) = MkEdge n1 n0 (reverse x)
+
+public export
+edgeData : Edge e -> e
+edgeData (MkEdge _ _ x) = x
 
 -- invariants: All the NodeLabels referred to in the edge and root lists actually exist.
 public export
@@ -127,6 +140,10 @@ starGraph e rn ns = MkGraph [0] (fromList ((0,rn)::zip ((+1)<$>indices) ns)) ((\
 public export
 PictureGraph : Nat -> Type
 PictureGraph i = Graph i PictureEdgeLabel WordPicture
+
+export
+Reversable PictureEdgeLabel where
+    reverse (x,y) = (y,x)
 
 export
 enclosePicture : {i:Nat} -> PictureGraph 1 -> PictureGraph i -> PictureGraph (S i)

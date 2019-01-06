@@ -96,6 +96,9 @@ scalePosition s (MkPosition p a) = MkPosition ((s*) <$> p) a
 applyTransform : Transform -> Point -> Point
 applyTransform (MkTransform (MkPosition p a) s) = (<+>) p . rotate a . map (s*)
 
+transformPosition : Transform -> Position -> Position
+transformPosition (MkTransform tp s) p = tp <+> scalePosition s p
+
 translateTransform : Point -> Transform
 translateTransform [x,y] = MkTransform (MkPosition [x,y] neutral) 1
 

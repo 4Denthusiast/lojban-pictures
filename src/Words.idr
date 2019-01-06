@@ -274,9 +274,11 @@ pictureStubNumeral Around' = (True, 2)
 pictureStubNumeral SeltauStub = (True, 3)
 pictureStubNumeral TertauStub = (True, 4)
 
+export
 implementation Eq PictureStubLabel where
     (==) s s' = pictureStubNumeral s == pictureStubNumeral s'
 
+export
 implementation Ord PictureStubLabel where
     compare s s' = compare (pictureStubNumeral s) (pictureStubNumeral s')
 

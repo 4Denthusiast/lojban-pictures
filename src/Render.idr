@@ -13,35 +13,77 @@ import Graphics.Color
 import Graphics.SDL2.SDL
 import Graphics.SDL2.SDLTTF
 
-maybeRevEdge : Bool -> Edge (a,a) -> Edge (a,a)
-maybeRevEdge False (MkEdge n0 n1 (x,y)) = MkEdge n0 n1 (x,y)
-maybeRevEdge True  (MkEdge n0 n1 (x,y)) = MkEdge n1 n0 (y,x)
+maybeReverse : Reversable e => Bool -> e -> e
+maybeReverse False = id
+maybeReverse True  = reverse
 
-absorbLeaf : NodeLabel -> SGraph PictureEdgeLabel WordPicture -> SGraph PictureEdgeLabel WordPicture
-absorbLeaf nl (MkSGraph ns es) = fromMaybe (MkSGraph ns es) $ do
-    (leafPic, leafStubs) <- lookup nl ns
-    [(eRev, eLab)] <- the (Maybe (List (Bool,EdgeLabel))) $ case leafStubs of {[_] => Just leafStubs; _ => Nothing}
-    MkEdge pl _ (pStub,lStub) <- maybeRevEdge eRev <$> lookup eLab es
-    (pPic, pStubs) <- lookup pl ns
-    pStubs' <- traverse (\(r,el) => (\(MkEdge _ _ (_,s)) => s) <$> maybeRevEdge r <$> lookup el es) pStubs
-    let pPic' = pPic $ emptyContext pStubs'
-    let leafPic' = leafPic $ emptyContext [lStub]
-    let lPic = (\pPos, lPos => Transformed (MkTransform pPos 1) $ (Line [0,0] [0,2]) <+> Transformed (MkTransform (MkPosition [0,2] back <-> lPos) 1) (picture leafPic')) <$> stubs pPic' pStub <*> stubs leafPic' lStub
-    pure $ case lPic of
-        Just lPic' => MkSGraph (insert pl (record {picture $= (<+> lPic')} . pPic . record {stubs $= (pStub::)}, delete (not eRev, eLab) pStubs) $ delete nl ns) (delete eLab es)
-        Nothing => MkSGraph ns (delete eLab es)
+nearStub : (Bool, Edge PictureEdgeLabel) -> PictureStubLabel
+nearStub = fst . edgeData . uncurry maybeReverse
 
-absorbLeaves : SGraph PictureEdgeLabel WordPicture -> List Picture
-absorbLeaves (MkSGraph ns es) = let (MkSGraph ns' es') = foldr absorbLeaf (MkSGraph ns es) (keys ns) in
-    if length (keys ns') + length (keys es') == length (keys ns) + length (keys es)
-        then map (picture . (flip id $ emptyContext []) . fst) $ values ns'
-        else absorbLeaves (MkSGraph ns' es')
+ProcessedWord : Type
+ProcessedWord = (Picture, SortedMap (NodeLabel, PictureStubLabel) Position)
 
-combinePicturesWithoutOverlap : Picture -> Picture -> Picture
-combinePicturesWithoutOverlap p0 p1 = p0 <+> Transformed t p1 
+EitherWord : Type
+EitherWord = Either WordPicture ProcessedWord
+
+combinePicturesWithoutOverlap : ProcessedWord -> ProcessedWord -> ProcessedWord
+combinePicturesWithoutOverlap (p0,ss0) (p1,ss1) = (p0 <+> Transformed t p1, mergeLeft ss0 (map (transformPosition t) ss1))
     where dy : Double
           dy = max 0 $ minShiftToDisjoint (pictureHull p0) (pictureHull p1)
           t = translateTransform [0,-dy]
+
+preProcessGraph : SGraph PictureEdgeLabel WordPicture -> SGraph (Edge PictureEdgeLabel) EitherWord
+preProcessGraph (MkSGraph ns es) = MkSGraph (map (\(n,els) => (Left n, els)) ns) (map (\(MkEdge n0 n1 e) => MkEdge n0 n1 (MkEdge n0 n1 e)) es)
+
+absorbLeaf : NodeLabel -> SGraph (Edge PictureEdgeLabel) ProcessedWord -> SGraph (Edge PictureEdgeLabel) ProcessedWord
+absorbLeaf nl g = fromMaybe g $ do
+    ((lPic, lStubs), lEdges) <- lookup nl $ nodeMap g
+    [(eRev, el)] <- the (Maybe (List (Bool,EdgeLabel))) $ case lEdges of {[_] => Just lEdges; _ => Nothing}
+    MkEdge pl _ (MkEdge pl' ll' (pStub, lStub)) <- maybeReverse eRev <$> lookup el (edgeMap g)
+    ((pPic, pStubs), pEdges) <- lookup pl $ nodeMap g
+    pure $ case (lookup (pl',pStub) pStubs, lookup (ll',lStub) lStubs) of
+        (Just pStubPos, Just lStubPos) => let
+                t = MkTransform (pStubPos <+> MkPosition [0,2] back <-> lStubPos) 1
+                pic = pPic <+> Transformed t lPic <+> Transformed (MkTransform pStubPos 1) (Line [0,0] [0,2])
+                stubs = pStubs <+> map (transformPosition t) lStubs
+            in record {nodeMap $= insert pl ((pic, stubs), filter ((/=el).snd) pEdges) . delete nl, edgeMap $= delete el} g
+        _ => record {edgeMap $= delete el} g
+    
+absorbLeaves : SGraph (Edge PictureEdgeLabel) ProcessedWord -> SGraph (Edge PictureEdgeLabel) ProcessedWord
+absorbLeaves g = let g' = foldr absorbLeaf g (keys $ nodeMap g) in
+    if length (keys $ edgeMap g') == length (keys $ edgeMap g)
+        then g'
+        else absorbLeaves g'
+
+mutual
+    processInside : NodeLabel -> SGraph (Edge PictureEdgeLabel) EitherWord -> SGraph (Edge PictureEdgeLabel) EitherWord
+    processInside nl g = fromMaybe g $ do
+        (n,els) <- lookup nl $ nodeMap g
+        w <- either Just (const Nothing) n
+        let es = map (uncurry maybeReverse) $ catMaybes $ map (\(r,el) => (\e => (r,e)) <$> lookup el (edgeMap g)) els
+        let insideLabels = map (\(MkEdge _ l _) => l) $ filter ((==Around) . Basics.fst . edgeData . edgeData) es
+        let (gi, ies, g') = cutGraph insideLabels g
+        (_,els') <- lookup nl $ nodeMap g'
+        let (iPic, iStubs) = processGraph gi
+        let w' = w $ MkWordContext (pictureHull iPic) emptyHull (map (fst . edgeData . edgeData) es)
+        let wStubs = the (SortedMap (NodeLabel, PictureStubLabel) Position) $ fromList $ catMaybes $ map ((\s => (\p => ((nl,s),p)) <$> stubs w' s) . fst . edgeData . edgeData) es
+        let wProc = case stubs w' Around of
+            Nothing => (picture w', wStubs)
+            Just p => (picture w' <+> Transformed (MkTransform p 1) iPic, mergeLeft wStubs $ map (p<+>) iStubs)
+        let ies' = map (\(MkEdge n0 _ e) => MkEdge n0 nl e) ies
+        pure $ record {nodeMap $= insert nl (Right wProc, els' ++ map (\e => (False, e)) (keys ies')), edgeMap $= mergeLeft ies'} g'
+    
+    processInsides : SGraph (Edge PictureEdgeLabel) EitherWord -> SGraph (Edge PictureEdgeLabel) ProcessedWord
+    processInsides g = assumeProcessed $ foldr processInside g (keys $ nodeMap g)
+        where assumeProcessed : SGraph (Edge PictureEdgeLabel) EitherWord -> SGraph (Edge PictureEdgeLabel) ProcessedWord
+              assumeProcessed = map (\(Right n) => n)
+    
+    -- after absorbing all the leaves, give up on the remaining connections and combine into one picture.
+    unifyPicture : SGraph (Edge PictureEdgeLabel) ProcessedWord -> ProcessedWord
+    unifyPicture (MkSGraph ns _) = foldr combinePicturesWithoutOverlap (blankPicture, empty) $ map fst $ values ns
+    
+    processGraph : SGraph (Edge PictureEdgeLabel) EitherWord -> ProcessedWord
+    processGraph = unifyPicture . absorbLeaves . processInsides
 
 record DisplayState where
     constructor MkState
@@ -81,4 +123,4 @@ renderPicture p = do
 
 export
 renderPictureGraph : PictureGraph 0 -> IO ()
-renderPictureGraph = renderPicture . foldr combinePicturesWithoutOverlap blankPicture . (\ps => trace ("fragments: "++show (length ps)) ps) . absorbLeaves . convertGraph
+renderPictureGraph = renderPicture . fst . processGraph . preProcessGraph . convertGraph
