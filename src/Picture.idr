@@ -6,6 +6,7 @@ import Data.Vect
 import Debug.Trace
 import Graphics.Color
 import Graphics.SDL2.SDL
+import Graphics.SDL2.GFX
 import Graphics.SDL2.SDLTTF
 
 %access public export
@@ -233,12 +234,12 @@ circumcircle (MkHull (p0::ps')) = twoPoint p1 p2
           dist2 p p' = sum $ map (\c => c*c) $ p <-> p'
           dot : Point -> Point -> Double
           dot p p' = sum $ zipWith (*) p p'
-          minBy : Ord b => (Point -> b) -> Point
-          minBy f = snd $ foldr max (f p0, p0) (map (\p => (f p, p)) ps)
-          p1 = minBy (negate . dist2 p0)
-          p2 = minBy (\p => - dist2 p1 p / dot (p <-> p1) (p0 <-> p1))
+          minBy : Ord b => List Point -> (Point -> b) -> Point
+          minBy ps' f = snd $ foldr max (f p0, p0) (map (\p => (f p, p)) (ps \\ ps'))
+          p1 = minBy [p0] (negate . dist2 p0)
+          p2 = minBy [p0, p1] (\p => - dist2 p1 p / dot (p <-> p1) (p0 <-> p1))
           twoPoint : Point -> Point -> (Point, Double)
-          twoPoint p p' = let p'' = minBy (\p'' => dot (p''<->p') (p''<->p) / sqrt (dist2 p'' p' * dist2 p'' p)) in
+          twoPoint p p' = let p'' = minBy [p, p'] (\p'' => dot (p''<->p') (p''<->p) / sqrt (dist2 p'' p' * dist2 p'' p)) in
               if dot (p''<->p') (p''<->p) <= 0 then diameter p p'
               else if dot (p'<->p'') (p'<->p ) < 0 then twoPoint p'' p
               else if dot (p <->p'') (p <->p') < 0 then twoPoint p'' p'
@@ -257,7 +258,7 @@ pictureHull : Picture -> ConvexHull
 pictureHull (Dot p) = makeHull [p]
 pictureHull (Line p p') = makeHull [p,p']
 pictureHull (Bezier ps) = makeHull $ toList ps
-pictureHull (Circle p r) = transformHull (MkTransform (MkPosition p neutral) (1/y)) $ makeHull $ [[1,0],[0.5,-y],[-0.5,-y],[-1,0],[-0.5,y],[0.5,y]]
+pictureHull (Circle p r) = transformHull (MkTransform (MkPosition p neutral) (r/y)) $ makeHull $ [[1,0],[0.5,-y],[-0.5,-y],[-1,0],[-0.5,y],[0.5,y]]
     where y = sqrt 3 / 2
 pictureHull (Text s) = let l = cast (length s) / 4 in makeHull [[-l,0],[0,l],[l,0],[0,-l]] -- I don't have any good estimate for text's size.
 pictureHull (Transformed t p) = transformHull t $ pictureHull p
@@ -269,24 +270,27 @@ Semigroup Picture where
 blankPicture : Picture
 blankPicture = Pictures []
 
+Show Picture where
+    show p = "Pict"
+
 transformToInt : Transform -> Point -> Vect 2 Int
 transformToInt t = liftA2 (*) [1,-1] . map (cast . (+0.5)) . applyTransform t
 
 draw : Transform -> SDLRenderer -> SDLFont -> Picture -> IO ()
 draw t rend font (Dot p) = let
         [x,y] = transformToInt t p
-    in filledRect rend (x-1) (y-1) (x+1) (y+1) 0 0 0 255
+    in filledRectangle rend (x-1) (y-1) (x+1) (y+1) 0 0 0 255
 draw t rend font (Line e0 e1) = let
         [x0,y0] = transformToInt t e0
         [x1,y1] = transformToInt t e1
-    in drawLine rend x0 y0 x1 y1 0 0 0 255
+    in strokeLine rend x0 y0 x1 y1 0 0 0 255
 draw t rend font (Bezier ps) = let
-        [xs,ys] = map toList $ transpose $ map (transformToInt t) ps
-    in sdlBezier rend xs ys 3 0 0 0 255
+        [xs,ys] = transpose $ map (transformToInt t) ps
+    in strokeBezier rend xs ys 6 0 0 0 255
 draw t rend font (Circle c r) = let
         [x,y] = transformToInt t c
         r' = cast $ r * scale t
-    in sdlEllipse rend x y r' r' 0 0 0 255
+    in strokeAACircle rend x y r' 0 0 0 255
 draw t rend font (Text s) = let
         [x,y] = transformToInt t [0,0]
     in renderTextSolid rend font s black x y

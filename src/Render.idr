@@ -17,9 +17,6 @@ maybeReverse : Reversable e => Bool -> e -> e
 maybeReverse False = id
 maybeReverse True  = reverse
 
-nearStub : (Bool, Edge PictureEdgeLabel) -> PictureStubLabel
-nearStub = fst . edgeData . uncurry maybeReverse
-
 ProcessedWord : Type
 ProcessedWord = (Picture, SortedMap (NodeLabel, PictureStubLabel) Position)
 
@@ -30,7 +27,7 @@ combinePicturesWithoutOverlap : ProcessedWord -> ProcessedWord -> ProcessedWord
 combinePicturesWithoutOverlap (p0,ss0) (p1,ss1) = (p0 <+> Transformed t p1, mergeLeft ss0 (map (transformPosition t) ss1))
     where dy : Double
           dy = max 0 $ minShiftToDisjoint (pictureHull p0) (pictureHull p1)
-          t = translateTransform [0,-dy]
+          t = translateTransform [0,-1-dy]
 
 preProcessGraph : SGraph PictureEdgeLabel WordPicture -> SGraph (Edge PictureEdgeLabel) EitherWord
 preProcessGraph (MkSGraph ns es) = MkSGraph (map (\(n,els) => (Left n, els)) ns) (map (\(MkEdge n0 n1 e) => MkEdge n0 n1 (MkEdge n0 n1 e)) es)
@@ -39,7 +36,7 @@ absorbLeaf : NodeLabel -> SGraph (Edge PictureEdgeLabel) ProcessedWord -> SGraph
 absorbLeaf nl g = fromMaybe g $ do
     ((lPic, lStubs), lEdges) <- lookup nl $ nodeMap g
     [(eRev, el)] <- the (Maybe (List (Bool,EdgeLabel))) $ case lEdges of {[_] => Just lEdges; _ => Nothing}
-    MkEdge pl _ (MkEdge pl' ll' (pStub, lStub)) <- maybeReverse eRev <$> lookup el (edgeMap g)
+    MkEdge _ pl (MkEdge ll' pl' (lStub, pStub)) <- maybeReverse eRev <$> lookup el (edgeMap g)
     ((pPic, pStubs), pEdges) <- lookup pl $ nodeMap g
     pure $ case (lookup (pl',pStub) pStubs, lookup (ll',lStub) lStubs) of
         (Just pStubPos, Just lStubPos) => let
@@ -61,17 +58,19 @@ mutual
         (n,els) <- lookup nl $ nodeMap g
         w <- either Just (const Nothing) n
         let es = map (uncurry maybeReverse) $ catMaybes $ map (\(r,el) => (\e => (r,e)) <$> lookup el (edgeMap g)) els
+        let insidenessEdgeLabels = map snd $ filter (\(r,e) => (==Just Around) $ map (fst . edgeData . edgeData . maybeReverse r) $ lookup e $ edgeMap g) els
         let insideLabels = map (\(MkEdge _ l _) => l) $ filter ((==Around) . Basics.fst . edgeData . edgeData) es
         let (gi, ies, g') = cutGraph insideLabels g
         (_,els') <- lookup nl $ nodeMap g'
         let (iPic, iStubs) = processGraph gi
-        let w' = w $ MkWordContext (pictureHull iPic) emptyHull (map (fst . edgeData . edgeData) es)
-        let wStubs = the (SortedMap (NodeLabel, PictureStubLabel) Position) $ fromList $ catMaybes $ map ((\s => (\p => ((nl,s),p)) <$> stubs w' s) . fst . edgeData . edgeData) es
+        let wStubList = map (fst . edgeData . edgeData) es
+        let w' = w $ MkWordContext (pictureHull iPic) emptyHull wStubList
+        let wStubs = the (SortedMap (NodeLabel, PictureStubLabel) Position) $ fromList $ catMaybes $ map (\s => (\p => ((nl,s),p)) <$> stubs w' s) wStubList
         let wProc = case stubs w' Around of
             Nothing => (picture w', wStubs)
             Just p => (picture w' <+> Transformed (MkTransform p 1) iPic, mergeLeft wStubs $ map (p<+>) iStubs)
         let ies' = map (\(MkEdge n0 _ e) => MkEdge n0 nl e) ies
-        pure $ record {nodeMap $= insert nl (Right wProc, els' ++ map (\e => (False, e)) (keys ies')), edgeMap $= mergeLeft ies'} g'
+        pure $ record {nodeMap $= insert nl (Right wProc, filter (not . (flip elem insidenessEdgeLabels) . snd) $ els' ++ map (\e => (True, e)) (keys ies')), edgeMap $= mergeLeft $ foldr delete ies' insidenessEdgeLabels} g'
     
     processInsides : SGraph (Edge PictureEdgeLabel) EitherWord -> SGraph (Edge PictureEdgeLabel) ProcessedWord
     processInsides g = assumeProcessed $ foldr processInside g (keys $ nodeMap g)

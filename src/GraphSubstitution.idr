@@ -16,7 +16,7 @@ adjust f k m = case lookup k m of
     Just v  => insert k (f v) m
 
 public export
--- A variant graph representation optimised for local modification. (True, e) is for edges out, and (False, e) for edges in.
+-- A variant graph representation optimised for local modification. (False, e) is for edges out, and (True, e) for edges in.
 record SGraph (edgeType : Type) (nodeType : Type) where
     constructor MkSGraph
     nodeMap : SortedMap NodeLabel (nodeType, List (Bool, EdgeLabel))
@@ -33,7 +33,7 @@ convertGraph (MkGraph rs ns es) = MkSGraph (foldr annotate (map (\n => (n,[])) n
           es' = zip [0..length es] es
           annotate' : NodeLabel -> Bool -> EdgeLabel -> SortedMap NodeLabel (n, List (Bool, EdgeLabel)) -> SortedMap NodeLabel (n, List (Bool, EdgeLabel))
           annotate' l b s ns' = adjust (\(n,ss) => (n,(b,s)::ss)) l ns'
-          annotate (el, MkEdge n0 n1 _) ns' = annotate' n0 True el $ annotate' n1 False el ns'
+          annotate (el, MkEdge n0 n1 _) ns' = annotate' n0 False el $ annotate' n1 True el ns'
 
 -- Given a set of nodes, partition the graph into the nodes inside, the nodes outside, and the edges between. Edges exiting the set are flipped using the function provided.
 export
@@ -41,10 +41,6 @@ cutGraph : Reversable e => List NodeLabel -> SGraph e n -> (SGraph e n, SortedMa
 cutGraph nl (MkSGraph ns es) = (MkSGraph nsi esii, mergeLeft esoi (map reverse esio), MkSGraph nso esoo)
     where nl' : SortedSet NodeLabel
           nl' = fromList nl
-          nsi : SortedMap NodeLabel (n, List (Bool, EdgeLabel))
-          nsi = fromList $ filter (flip contains nl' . fst) $ toList ns
-          nso : SortedMap NodeLabel (n, List (Bool, EdgeLabel))
-          nso = fromList $ filter (not . flip contains nl' . fst) $ toList ns
           esii : SortedMap EdgeLabel (Edge e)
           esii = fromList $ filter (\(_,MkEdge n0 n1 _) => contains n0 nl' && contains n1 nl') $ toList es
           esio : SortedMap EdgeLabel (Edge e)
@@ -53,3 +49,15 @@ cutGraph nl (MkSGraph ns es) = (MkSGraph nsi esii, mergeLeft esoi (map reverse e
           esoi = fromList $ filter (\(_,MkEdge n0 n1 _) => not (contains n0 nl') && contains n1 nl') $ toList es
           esoo : SortedMap EdgeLabel (Edge e)
           esoo = fromList $ filter (\(_,MkEdge n0 n1 _) => not (contains n0 nl') && not (contains n1 nl')) $ toList es
+          xor : Bool -> Bool -> Bool
+          xor a b = if a then not b else b
+          ns' : SortedMap NodeLabel (n, List (Bool, EdgeLabel))
+          ns' = map (\(x, nes) => (x, map (\(b,el) => (xor b $ isJust $ lookup el esio, el)) nes)) ns
+          nsi : SortedMap NodeLabel (n, List (Bool, EdgeLabel))
+          nsi = fromList $ filter (flip contains nl' . fst) $ toList ns'
+          nso : SortedMap NodeLabel (n, List (Bool, EdgeLabel))
+          nso = fromList $ filter (not . flip contains nl' . fst) $ toList ns'
+
+export
+(Show e, Show n) => Show (SGraph e n) where
+    showPrec d (MkSGraph ns es) = showCon d "MkSGraph" $ showArg ns ++ showArg es
