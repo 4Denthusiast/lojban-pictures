@@ -34,7 +34,7 @@ confluencePicture = pure $ const $ MkWordPicture "." blankPicture $ \s => case s
     _ => Nothing
 
 quantifierPicture : PictureGraph 1
-quantifierPicture = pure $ const $ MkWordPicture "│├" blankPicture $ \s => case s of
+quantifierPicture = pure $ const $ MkWordPicture "│├" (Line [0,-0.5] [0,0.5] <+> Line [0.2,-0.5] [0.2,0.5]) $ \s => case s of
     NumberedStub       Z   => Just $ MkPosition [0, 0.5] neutral
     NumberedStub    (S Z)  => Just $ MkPosition [0,-0.5] back
     NumberedStub (S (S Z)) => Just $ MkPosition [0.2,0] right
@@ -89,6 +89,9 @@ maybeRelativeClauseJoin m Nothing  = m
 
 simpleStar : {n:Nat} -> Nat -> Nat -> PictureGraph (S n) -> PictureGraph 1 -> PictureGraph (S n)
 simpleStar a b h t = pictureTaggedStarGraph h [(a,b,t)]
+
+branch : WordParser 1 -> Parser (PictureGraph 1 -> PictureGraph 1 -> PictureGraph 1)
+branch r b0 b1 = flip pictureTaggedStarGraph [(1,0,b0),(2,0,b1)] <$> r
 
 bySelma'o : Selma'o -> WordParser 1
 bySelma'o s = join $ satisfyMaybe (\w => if wordSelma'o w == s then Just (pictureOf w) else Nothing)
@@ -189,7 +192,7 @@ mutual
     statement = (<?> "statement") $ flip (foldr (simpleStar 1 0)) <$> many prenex <*> statement1
     
     statement1 : WordParser 1
-    statement1 = (<?> "statement1") $ chainl1 statement2 ((\j, sl, sr => pictureTaggedStarGraph j [(1,0,sl),(2,0,sl)]) <$> (bySelma'o I *> joikJek))
+    statement1 = (<?> "statement1") $ chainl1 statement2 (bySelma'o I *> branch joikJek)
     
     -- TODO: fix "co'e .i je bai je bai bo co'e"
     statement2 : WordParser 1
@@ -213,7 +216,6 @@ mutual
         <|> (joinedTerms <* opt (bySelma'o VAU)) --TODO: work out what to do with the free modifiers here.
         <|> prenex
         <|> uproot {i=2} {i'=1} <$> relativeClauses
-        <|> links
         <|> linkArgs
     
     prenex : WordParser 1
@@ -253,25 +255,27 @@ mutual
             <|> ((\n => (NaTag, Just n)) <$> (withFree $ bySelma'o NA <* bySelma'o KU))
         where maybeSumti = (Just <$> sumti) <|> (bySelma'o KU *> pure Nothing)
     
-    -- TODO
     sumti : WordParser 1
-    sumti = (<?> "sumti") $ sumti1
+    sumti = (<?> "sumti") $ maybeRelativeClauseJoin <$> sumti1 <*> (opt $ bySelma'o VUhO *> relativeClauses)
     
     -- TODO
     sumti1 : WordParser 1
     sumti1 = sumti2
     
-    -- TODO
     sumti2 : WordParser 1
-    sumti2 = sumti3
+    sumti2 = chainl1 sumti3 (branch joikEk)
     
     -- TODO
     sumti3 : WordParser 1
     sumti3 = sumti4
     
-    -- TODO
     sumti4 : WordParser 1
-    sumti4 = sumti5
+    sumti4 = sumti5 <|> do
+        ga <- gek
+        s0 <- lazy sumti
+        gi <- gik ga
+        s1 <- lazy sumti4
+        pure $ pictureTaggedStarGraph gi [(1,0,s0),(2,0,s1)]
     
     sumti5 : WordParser 1
     sumti5 = maybeRelativeClauseJoin <$>
@@ -369,37 +373,94 @@ mutual
         <|> (bySelma'o KE *> lazy selbri3 <* opt (bySelma'o KEhE))
         <|> (simpleStar 1 0 <$> withFree (bySelma'o ME) <*> lazy sumti <* opt (bySelma'o MEhU))
         <|> (simpleStar 1 0 <$> (number <|> lerfuString) <*> withFree (bySelma'o MOI))
-        <|> (simpleStar 1 0 <$> withFree (bySelma'o NUhA) <*> mexOperator)
+        <|> fail "NUhA not yet implemented."
         <|> (tanruJoin <$> withFree (bySelma'o SE) <*> lazy tanruUnit2)
-        <|> fail "rule for jai not yet implemented."
+        <|> fail "JAI not yet implemented."
         <|> (flip freeJoin <$> withFree (bySelma'o NAhE) <*> lazy tanruUnit2)
         <|> (simpleStar 1 0 <$> withFree (bySelma'o NU) <*> lazy subsentence <* bySelma'o KEI) --TODO
     
-    linkArgs : WordParser 1
-    linkArgs = fail "linkArgs not yet implemented."
-    
-    links : WordParser 1
-    links = fail "links not yet implemented."
+    linkArgs : Parser Terms
+    linkArgs = bySelma'o BE *> sepBy1 (lazy term) (bySelma'o BEI) <* opt (bySelma'o BEhO)
     
     quantifier : WordParser 1
     quantifier = (<?> "quantifier") $
-        number <* bySelma'o BOI
+        number <* opt (bySelma'o BOI)
         <|> bySelma'o VEI *> mex <* opt (bySelma'o VEhO)
     
     mex : WordParser 1
-    mex = fail "mex not yet implemented."
+    mex = chainl1 mex1 (branch operator) <|> bySelma'o FUhA *> rpExpression
+    
+    mex1 : WordParser 1
+    mex1 = chainr1 mex2 (bySelma'o BIhE *> branch operator)
+    
+    mex2 : WordParser 1
+    mex2 = operand <|> do
+        opt $ bySelma'o PEhO
+        op <- operator
+        ts <- some mex2
+        opt $ bySelma'o KUhE
+        pure $ pictureTaggedStarGraph op $ zip [1..length ts] $ map (\t => (0,t)) ts
+    
+    rpExpression : WordParser 1
+    rpExpression = do
+        t0 <- rpOperand
+        t1 <- rpOperand
+        op <- binOperator
+        pure $ op t0 t1
+    
+    rpOperand : WordParser 1
+    rpOperand = operand <|> lazy rpExpression
+    
+    -- TODO
+    operator : WordParser 1
+    operator = operator1
+    
+    -- TODO
+    operator1 : WordParser 1
+    operator1 = operator2
+    
+    operator2 : WordParser 1
+    operator2 = mexOperator <|> (bySelma'o KE *> lazy operator <* opt (bySelma'o KEhE))
     
     mexOperator : WordParser 1
-    mexOperator = fail "mex-operator not yet implemented."
+    mexOperator =
+        tanruJoin <$> withFree (bySelma'o SE) <*> lazy mexOperator
+        <|> flip freeJoin <$> withFree (bySelma'o NAhE) <*> lazy mexOperator
+        <|> fail "MAhO not yet implemented."
+        <|> fail "NAhU not yet implemented."
+        <|> withFree (bySelma'o VUhU)
+    
+    -- TODO
+    operand : WordParser 1
+    operand = operand1
+    
+    -- TODO
+    operand1 : WordParser 1
+    operand1 = chainl1 operand2 (branch joikEk)
+    
+    -- TODO
+    operand2 : WordParser 1
+    operand2 = operand3
+    
+    operand3 : WordParser 1
+    operand3 =
+        lazy quantifier
+        <|> lerfuString <* opt (bySelma'o BOI)
+        <|> fail "NIhE not yet implemented."
+        <|> fail "MOhE not yet implemented."
+        <|> fail "JOhI not yet implemented."
+        <|> fail "operand3 conjunctions not yet implemented."
+        <|> simpleStar 1 0 <$> (withFree $ bySelma'o LAhE) <*> lazy operand <* opt (bySelma'o LUhU)
+        <|> flip freeJoin <$> (withFree $ bySelma'o NAhE <* bySelma'o BO) <*> lazy operand <* opt (bySelma'o LUhU)
     
     -- Numbers are expected here in little-endian order, contrary to normal Lojban. The conversion is non-trivial, due to the presence of things other than digits in PA
     number : WordParser 1
-    number = bySelma'o PA
-        <|> simpleStar 1 0 <$> bySelma'o PA <*> (lazy number <|> lerfuString)
+    number = simpleStar 1 0 <$> bySelma'o PA <*> (lazy number <|> lerfuString)
+        <|> bySelma'o PA
     
     lerfuString : WordParser 1
-    lerfuString = lerfuWord
-        <|> simpleStar 1 0 <$> lerfuWord <*> (lazy number <|> lazy lerfuString)
+    lerfuString = simpleStar 1 0 <$> lerfuWord <*> (lazy number <|> lazy lerfuString)
+        <|> lerfuWord
     
     lerfuWord : WordParser 1
     lerfuWord =
@@ -408,26 +469,67 @@ mutual
         <|> simpleStar 2 0 <$> bySelma'o TEI <*> lazy lerfuString <* bySelma'o FOI
     
     ek : WordParser 1
-    ek = fail "ek not yet implemented."
+    ek = afterthought A
     
     gihek : WordParser 1
-    gihek = fail "gihek not yet implemented."
+    gihek = afterthought GIhA
     
     jek : WordParser 1
-    jek = fail "jek not yet implemented."
+    jek = afterthought JA
     
     joik : WordParser 1
-    joik = fail "joik not yet implemented."
+    joik = nonLogical JOI <|> interval <|> fail "GAhO not yet implemented."
+    
+    interval : WordParser 1
+    interval = nonLogical BIhI
+    
+    joikEk : WordParser 1
+    joikEk = withFree (joik <|> ek)
     
     joikJek : WordParser 1
-    joikJek = fail "joikJek not yet implemented."
+    joikJek = withFree (joik <|> jek)
     
-    guhek : WordParser 1
-    guhek = fail "guhek not yet implemented."
+    gek : Parser String
+    gek = forethought GA
+      <|> withFree (joik <* bySelma'o GI)
+      <|> fail "gek from tags not yet implemented."
     
-    -- Takes the first part of the conjunction (gihek/guhek), and returns the completed picture.
-    gik : PictureGraph 1 -> WordParser 1
-    gik ge = fail "gik not yet implemented."
+    guhek : Parser String
+    guhek = forethought GUhA
+    
+    -- Takes the first part of the conjunction (gek/guhek), and returns the completed picture.
+    gik : String -> WordParser 1
+    gik ge = do
+        bySelma'o GI
+        nai <- isJust <$> (opt $ bySelma'o NAI)
+        findWordPicture $ ge ++ (if nai then "nai" else "")
+    
+    afterthought : Selma'o -> WordParser 1
+    afterthought s = do
+        na <- isJust <$> opt (bySelma'o NA) -- Ignoring the possibility of "ja'a"
+        se <- isJust <$> opt (bySelma'o SE) -- Ignore the value. What does "te .a" mean anyway?
+        a <- bySelma'o s
+        nai <- isJust <$> opt (bySelma'o NAI)
+        let a' = strHead $ reverse $ string $ getRoot FZ a $ emptyContext [] -- The letter for the logical function.
+        let se' = se && (a' == 'u')
+        findWordPicture $ (if na then "na" else "") ++ (if se' then "se" else "") ++ pack (the (List Char) ['*',a']) ++ (if nai then "nai" else "")
+    
+    forethought : Selma'o -> Parser String
+    forethought s = do
+        se <- isJust <$> opt (bySelma'o SE)
+        a <- bySelma'o s
+        nai <- isJust <$> opt (bySelma'o NAI)
+        let a' = strHead $ reverse $ string $ getRoot FZ a $ emptyContext []
+        let se' = se && (a' == 'u')
+        pure $ (if nai then "na" else "") ++ (if se' then "se" else "") ++ pack (the (List Char) ['*',a'])
+    
+    nonLogical : Selma'o -> WordParser 1
+    nonLogical s = do
+        se <- isJust <$> opt (bySelma'o SE)
+        a <- bySelma'o s
+        nai <- opt $ bySelma'o NAI
+        se_a <- if se then findWordPicture ("se" ++ string (getRoot FZ a $ emptyContext [])) else pure a
+        pure $ maybe se_a (freeJoin se_a) nai
     
     -- TODO
     tag : WordParser 1

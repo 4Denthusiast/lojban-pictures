@@ -92,11 +92,16 @@ record DisplayState where
 Eq DisplayState where
     (==) (MkState t p) (MkState t' p') = t == t' && p == p'
 
+-- A transform so that the picture fits within the unit circle (with a margin)
+normalisePlacementTransform : Picture -> Transform
+normalisePlacementTransform p = let (c, r) = circumcircle $ pictureHull p
+    in scaleTransform (1/(r+1)) <+> translateTransform (inverse c)
+
 renderPicture : Picture -> IO ()
 renderPicture p = do
         (ctx, rend) <- startSDL "Pretty lojban" 600 600
         font <- ttfOpenFont "/usr/share/fonts/truetype/freefont/FreeSans.ttf" 15
-        loop rend font True (MkState (MkTransform (MkPosition [300,300] neutral) 20) [0,0])
+        loop rend font True (MkState (MkTransform (MkPosition [300,300] neutral) 300 <+> normalisePlacementTransform p) [0,0])
         ttfCloseFont font
         endSDL ctx rend
     where updateState : DisplayState -> Event -> DisplayState

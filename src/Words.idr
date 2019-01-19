@@ -5,6 +5,7 @@ import Picture
 import Control.Algebra
 import Data.SortedMap
 import Data.Vect
+import Debug.Trace
 
 public export
 data Selma'o =
@@ -14,6 +15,7 @@ data Selma'o =
     BE   |
     BEI  |
     BEhO |
+    BIhE |
     BIhI |
     BO   |
     BOI  |
@@ -141,6 +143,7 @@ implementation Eq Selma'o where
     (==) BE   BE   = True
     (==) BEI  BEI  = True
     (==) BEhO BEhO = True
+    (==) BIhE BIhE = True
     (==) BIhI BIhI = True
     (==) BO   BO   = True
     (==) BOI  BOI  = True
@@ -334,10 +337,17 @@ emptyStubPositions : StubPositions
 emptyStubPositions _ = Nothing
 
 cmavrxavoStubPositions : StubPositions
-cmavrxavoStubPositions (NumberedStub       Z  ) = Just $ MkPosition [ 0  , 0.5] neutral
-cmavrxavoStubPositions (NumberedStub    (S Z) ) = Just $ MkPosition [ 0.5,-0.5] back
-cmavrxavoStubPositions (NumberedStub (S (S Z))) = Just $ MkPosition [-0.5,-0.5] back
+cmavrxavoStubPositions (NumberedStub       Z  ) = Just $ MkPosition [ 0  , 0.2] neutral
+cmavrxavoStubPositions (NumberedStub    (S Z) ) = Just $ MkPosition [-0.4,-1.2] back
+cmavrxavoStubPositions (NumberedStub (S (S Z))) = Just $ MkPosition [ 0.4,-1.2] back
 cmavrxavoStubPositions _ = Nothing
+
+-- ne, pe, po and po'e, not po'u, no'u or goi.
+cmavrgoiStubPositions : StubPositions
+cmavrgoiStubPositions (NumberedStub       Z  ) = Just $ MkPosition [0,0] neutral
+cmavrgoiStubPositions (NumberedStub    (S Z) ) = Just $ MkPosition [0,-1] back
+cmavrgoiStubPositions (NumberedStub (S (S Z))) = Just $ MkPosition [1,0] right
+cmavrgoiStubPositions _ = Nothing
 
 cmavrxivoStubPositions : StubPositions
 cmavrxivoStubPositions (NumberedStub       Z  ) = Just $ MkPosition [-0.5,0] left
@@ -353,6 +363,12 @@ cmavrleStubPositions : StubPositions
 cmavrleStubPositions (NumberedStub    Z ) = Just $ MkPosition [0,0.5] neutral
 cmavrleStubPositions (NumberedStub (S Z)) = Just $ MkPosition [0,-1 ] back
 cmavrleStubPositions _ = Nothing
+
+cmavrnoiStubPositions : StubPositions
+cmavrnoiStubPositions (NumberedStub       Z  ) = Just $ MkPosition [0,0.5] neutral
+cmavrnoiStubPositions (NumberedStub    (S Z) ) = Just $ MkPosition [0,0] back
+cmavrnoiStubPositions (NumberedStub (S (S Z))) = Just $ MkPosition [0.4,-0.4] (angle (3*pi/4))
+cmavrnoiStubPositions _ = Nothing
 
 cmavrpaStubPositions : StubPositions
 cmavrpaStubPositions (NumberedStub    Z ) = Just $ MkPosition [ 0.5,0] right
@@ -380,17 +396,23 @@ cmevlaStubPositions _ = Nothing
 stubPositionsBySelma'o : Selma'o -> StubPositions
 stubPositionsBySelma'o A    = cmavrxavoStubPositions
 stubPositionsBySelma'o BU   = cmavrpaStubPositions
+stubPositionsBySelma'o FA   = emptyStubPositions
+stubPositionsBySelma'o GOI  = cmavrgoiStubPositions
 stubPositionsBySelma'o I    = cmavrxivoStubPositions
 stubPositionsBySelma'o KOhA = cmavrko'aStubPositions
 stubPositionsBySelma'o KU   = emptyStubPositions
 stubPositionsBySelma'o LE   = cmavrleStubPositions
+stubPositionsBySelma'o LI   = cmavrleStubPositions
 stubPositionsBySelma'o NA   = cmavruiStubPositions
 stubPositionsBySelma'o NAI  = cmavruiStubPositions
 stubPositionsBySelma'o NIhO = cmavrxivoStubPositions
+stubPositionsBySelma'o NOI  = cmavrnoiStubPositions
+stubPositionsBySelma'o PA   = cmavrpaStubPositions
 stubPositionsBySelma'o Y    = emptyStubPositions
 stubPositionsBySelma'o ZOI  = cmavrko'aStubPositions
 stubPositionsBySelma'o Brivla = defaultBrivlaStubPositions
 stubPositionsBySelma'o Cmevla = cmevlaStubPositions
+stubPositionsBySelma'o _ = ?otherSelma'oStubPositions
 
 export
 makeWordRecord : Selma'o -> String -> WordRecord
@@ -406,6 +428,76 @@ partialId : List a -> List a
 partialId (x::xs) = (x::xs)
 
 namespace pictureLib
+    
+    -- A
+    
+    a : Picture
+    a =  Bezier [[0,0],[ 0.4,-0.3],[ 0.4,-0.4],[ 0.4,-1]]
+     <+> Bezier [[0,0],[-0.4,-0.3],[-0.4,-0.4],[-0.4,-1]]
+     <+> Bezier [[-0.4,-1],[-0.2,-0.7],[0.2,-0.7],[0.4,-1]]
+    
+    e : Picture
+    e =  Line [-0.4,-0.3] [-0.4,-1]
+     <+> Line [-0.4,-1] [0.4,-1]
+     <+> Line [0.4,-1] [0.4,-0.3]
+     <+> Bezier [[-0.4,-0.3],[-0.4,0.1],[0.4,0.1],[0.4,-0.3]]
+    
+    o : Picture
+    o = a <+> Bezier [[-0.3,-1.1],[-0.1,-0.8],[0.1,-0.8],[0.3,-1.1]]
+    
+    u : Picture
+    u =  Line [-0.4,-0.3] [-0.4,-1]
+     <+> Line [-0.1,-1] [0.4,-1]
+     <+> Line [0.4,-1] [0.4,-0.6]
+     <+> Bezier [[-0.4,-0.3],[-0.4,0.1],[0.4,0.1],[0.4,-0.3]]
+    
+    se_u : Picture
+    se_u = Line [0.4,-0.3] [0.4,-1]
+       <+> Line [0.1,-1] [-0.4,-1]
+       <+> Line [-0.4,-1] [-0.4,-0.6]
+       <+> Bezier [[-0.4,-0.3],[-0.4,0.1],[0.4,0.1],[0.4,-0.3]]
+    
+    A_arg1Pos : Picture
+    A_arg1Pos = Line [-0.4,-1] [-0.4,-1.2]
+    
+    A_arg2Pos : Picture
+    A_arg2Pos = Line [ 0.4,-1] [ 0.4,-1.2]
+    
+    A_headPos : Picture
+    A_headPos = Line [0,0] [0,0.2]
+    
+    A_arg1Neg : Picture
+    A_arg1Neg = Circle [-0.4,-1.1] 0.1
+    
+    A_arg2Neg : Picture
+    A_arg2Neg = Circle [ 0.4,-1.1] 0.1
+    
+    A_headNeg : Picture
+    A_headNeg = Circle [0,0.1] 0.1
+    
+    -- no little circles for negation
+    A_allPos : Picture
+    A_allPos = A_headPos <+> A_arg1Pos <+> A_arg2Pos
+    
+    A_neg0 : Picture
+    A_neg0 = A_headNeg <+> A_arg1Pos <+> A_arg2Pos
+    
+    A_neg1 : Picture
+    A_neg1 = A_headPos <+> A_arg1Neg <+> A_arg2Pos
+    
+    A_neg2 : Picture
+    A_neg2 = A_headPos <+> A_arg1Pos <+> A_arg2Neg
+    
+    -- GOI
+    
+    pe : Picture
+    pe = Line [0,0] [1,0]
+     <+> Line [0,0] [0,-1]
+     <+> Bezier [[1,0],[1,-0.5],[0.7,-0.85],[0.2,-0.9]]
+     <+> Line [0.95,-0.3] [1.6,-0.3]
+    
+    -- KOhA
+    
     KOhAleft : Picture
     KOhAleft = Bezier [[0,0],[0,-1.5],[-1.5,0],[0,0]]
     
@@ -418,12 +510,46 @@ namespace pictureLib
     KOhA3_3rd : Picture
     KOhA3_3rd = Line [0,-0.3] [0.5,-0.3]
     
+    -- LE
+    
     lo : Picture
     lo = Bezier [[0,-1],[-0.7,-0.3],[-0.7,0.5],[0,0.5]]
      <+> Bezier [[0,-1],[ 0.7,-0.3],[ 0.7,0.5],[0,0.5]] --Bezier [[0,-1],[-1,1],[1,1],[0,-1]]
     
     le : Picture
     le = lo <+> Dot [0,0]
+    
+    -- NOI
+    
+    poi : Picture
+    poi = Line [0,0] [0,0.5]
+      <+> Line [0,0] [0.4,-0.4]
+      <+> Bezier [[0,0.5],[0.4,0.1],[0.4,0.1],[0.4,-0.4]]
+    
+    -- PA
+    
+    no : Picture
+    no = Line [-0.5,0] [0.5,0]
+     <+> Line [0,0] [0,-0.6]
+    
+    re : Picture
+    re = Line [-0.5,0] [0.5,0]
+     <+> Bezier [[0,0],[0,-0.6],[0,-0.6],[0.2,-0.6]]
+    
+    vo : Picture
+    vo = Line [-0.5,0] [0.5,0]
+     <+> Bezier [[0,0],[0,-0.6],[0,-0.6],[-0.2,-0.6]]
+    
+    xa : Picture
+    xa = no <+> Line [-0.2,-0.6] [0.2,-0.6]
+    
+    PA_0001b : Picture
+    PA_0001b = Line [0,-0.3] [0.2,-0.3]
+    
+    PA_1000b : Picture
+    PA_1000b = Line [0,-0.3] [-0.2,-0.3]
+    
+    -- broda
     
     brodV : Picture
     brodV = Bezier [[0,1],[4/3,1],[4/3,-1],[0,-1]]
@@ -433,20 +559,60 @@ namespace pictureLib
 wordRecords : SortedMap String WordRecord
 wordRecords = foldr (\w, t => insert (string w) w t) empty $ partialId [
         makeWordRecord  A    "a",
+        makeWordRecord  A    "e",
+        makeWordRecord  A    "o",
+        makeWordRecord  A    "u",
+        makeWordRecord' A    "*a" $ a <+> A_allPos,
+        makeWordRecord' A    "na*a" $ a <+> A_neg1,
+        makeWordRecord' A    "*anai" $ a <+> A_neg2,
+        makeWordRecord' A    "na*anai" $ e <+> A_neg0,
+        makeWordRecord' A    "*e" $ e <+> A_allPos,
+        makeWordRecord' A    "na*e" $ e <+> A_neg1,
+        makeWordRecord' A    "*enai" $ e <+> A_neg2,
+        makeWordRecord' A    "na*enai" $ a <+> A_neg0,
+        makeWordRecord' A    "*o" $ o <+> A_neg0,
+        makeWordRecord' A    "na*o" $ o <+> A_allPos,
+        makeWordRecord' A    "*onai" $ o <+> A_allPos,
+        makeWordRecord' A    "na*onai" $ o <+> A_neg0,
+        makeWordRecord' A    "*u" $ u <+> A_allPos,
+        makeWordRecord' A    "na*u" $ u <+> A_neg0,
+        makeWordRecord' A    "*unai" $ u <+> A_allPos,
+        makeWordRecord' A    "na*unai" $ u <+> A_neg0,
+        makeWordRecord' A    "se*u" $ se_u <+> A_allPos,
+        makeWordRecord' A    "nase*u" $ se_u <+> A_allPos,
+        makeWordRecord' A    "se*unai" $ se_u <+> A_neg0,
+        makeWordRecord' A    "nase*unai" $ se_u <+> A_neg0,
         makeWordRecord  BU   "bu",
         makeWordRecord  FA   "fa",
         makeWordRecord  FA   "fe",
         makeWordRecord  FA   "fi",
         makeWordRecord  FA   "fo",
         makeWordRecord  FA   "fu",
+        makeWordRecord  GA   "ga",
+        makeWordRecord  GA   "ge",
+        makeWordRecord  GA   "go",
+        makeWordRecord  GA   "gu",
+        makeWordRecord  GI   "gi",
+        makeWordRecord  GIhA "gi'a",
+        makeWordRecord  GIhA "gi'e",
+        makeWordRecord  GIhA "gi'o",
+        makeWordRecord  GIhA "gi'u",
+        makeWordRecord' GOI  "pe" $ pe,
         makeWordRecord' I    "i" $ Line [-0.5,0] [0.5,0],
         makeWordRecord  KU   "ku",
-        makeWordRecord' LE   "le" $ le,
-        makeWordRecord' LE   "lo" $ lo,
         makeWordRecord' KOhA "mi" $ KOhAleft <+> KOhA3_1st,
         makeWordRecord' KOhA "do" $ KOhAleft <+> KOhA3_2nd,
         makeWordRecord' KOhA "mi'o" $ KOhAleft <+> KOhA3_1st <+> KOhA3_2nd,
         makeWordRecord' KOhA "ma'a" $ KOhAleft <+> KOhA3_1st <+> KOhA3_2nd <+> KOhA3_3rd,
+        makeWordRecord  KUhO "ku'o",
+        makeWordRecord' LE   "le" $ le,
+        makeWordRecord' LE   "lo" $ lo,
+        makeWordRecord' LI   "li" $
+            Line [-0.5,-1] [0.5,-1] <+>
+            Line [-0.3,-0.8] [0.3,-0.8] <+>
+            Bezier [[-0.3,-0.8],[-0.5,-0.8],[-0.7,-0.6],[-0.7,-0.4]] <+>
+            Bezier [[-0.7,-0.4],[-0.7,0.8],[0.7,0.8],[0.7,-0.4]] <+>
+            Bezier [[0.3,-0.8],[0.5,-0.8],[0.7,-0.6],[0.7,-0.4]],
         makeWordRecord  NAI  "nai",
         makeWordRecord  NA   "na",
         makeWordRecord' NIhO "ni'o" $
@@ -454,6 +620,24 @@ wordRecords = foldr (\w, t => insert (string w) w t) empty $ partialId [
             Bezier [[0,0],[0,-0.5],[-0.7,0],[-0.7,-0.5]] <+>
             Bezier [[0,0],[0,-0.5],[ 0.7,0],[ 0.7,-0.5]],
         makeWordRecord  NIhO "no'i",
+        makeWordRecord' NOI  "poi" $ poi,
+        makeWordRecord' PA   "no"  $ no,
+        makeWordRecord' PA   "pa"  $ no <+> PA_0001b,
+        makeWordRecord' PA   "re"  $ re,
+        makeWordRecord' PA   "ci"  $ re <+> PA_0001b,
+        makeWordRecord' PA   "vo"  $ vo,
+        makeWordRecord' PA   "mu"  $ vo <+> PA_0001b,
+        makeWordRecord' PA   "xa"  $ xa,
+        makeWordRecord' PA   "ze"  $ xa <+> PA_0001b,
+        makeWordRecord' PA   "bi"  $ no <+> PA_1000b,
+        makeWordRecord' PA   "so"  $ no <+> PA_1000b <+> PA_0001b,
+        makeWordRecord' PA   "dau" $ re <+> PA_1000b,
+        makeWordRecord' PA   "fei" $ re <+> PA_1000b <+> PA_0001b,
+        makeWordRecord' PA   "gai" $ vo <+> PA_1000b,
+        makeWordRecord' PA   "jau" $ vo <+> PA_1000b <+> PA_0001b,
+        makeWordRecord' PA   "rei" $ xa <+> PA_1000b,
+        makeWordRecord' PA   "vai" $ xa <+> PA_1000b <+> PA_0001b,
+        makeWordRecord  SE   "se",
         makeWordRecord  Y    "y",
         makeWordRecord  ZOI  "zoi",
         MkWordRecord Brivla "broda" $ const $ MkWordPicture "broda" brodV brodaStubPositions
