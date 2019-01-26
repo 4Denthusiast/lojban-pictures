@@ -265,17 +265,21 @@ implementation Eq Selma'o where
     (==) _ _ = False
 
 public export
-data PictureStubLabel = FreeStub | SeFreeStub | NumberedStub Nat | Inside | Around | Around' | SeltauStub | TertauStub
+data PictureStubLabel = FreeStub | SeFreeStub | NumberedStub Nat | Inside | Around | Around' | SeltauStub | TertauStub | RerouteAny | SeRerouteAny | Reroute PictureStubLabel
 
-pictureStubNumeral : PictureStubLabel -> (Bool, Nat)
-pictureStubNumeral FreeStub = (False, 0)
-pictureStubNumeral SeFreeStub = (False, 1)
-pictureStubNumeral (NumberedStub n) = (False, 2+n)
-pictureStubNumeral Inside = (True, 0)
-pictureStubNumeral Around = (True, 1)
-pictureStubNumeral Around' = (True, 2)
-pictureStubNumeral SeltauStub = (True, 3)
-pictureStubNumeral TertauStub = (True, 4)
+total
+pictureStubNumeral : PictureStubLabel -> (Nat, Nat)
+pictureStubNumeral FreeStub = (0, 0)
+pictureStubNumeral SeFreeStub = (0, 1)
+pictureStubNumeral (NumberedStub n) = (0, 2+n)
+pictureStubNumeral Inside = (1, 0)
+pictureStubNumeral Around = (1, 1)
+pictureStubNumeral Around' = (1, 2)
+pictureStubNumeral SeltauStub = (1, 3)
+pictureStubNumeral TertauStub = (1, 4)
+pictureStubNumeral RerouteAny = (1, 5)
+pictureStubNumeral SeRerouteAny = (1, 6)
+pictureStubNumeral (Reroute s) = let (x,y) = pictureStubNumeral s in (2+x, y)
 
 export
 implementation Eq PictureStubLabel where
@@ -408,6 +412,7 @@ stubPositionsBySelma'o NAI  = cmavruiStubPositions
 stubPositionsBySelma'o NIhO = cmavrxivoStubPositions
 stubPositionsBySelma'o NOI  = cmavrnoiStubPositions
 stubPositionsBySelma'o PA   = cmavrpaStubPositions
+stubPositionsBySelma'o SE   = emptyStubPositions
 stubPositionsBySelma'o Y    = emptyStubPositions
 stubPositionsBySelma'o ZOI  = cmavrko'aStubPositions
 stubPositionsBySelma'o Brivla = defaultBrivlaStubPositions
@@ -638,6 +643,9 @@ wordRecords = foldr (\w, t => insert (string w) w t) empty $ partialId [
         makeWordRecord' PA   "rei" $ xa <+> PA_1000b,
         makeWordRecord' PA   "vai" $ xa <+> PA_1000b <+> PA_0001b,
         makeWordRecord  SE   "se",
+        makeWordRecord  SE   "te",
+        makeWordRecord  SE   "ve",
+        makeWordRecord  SE   "xe",
         makeWordRecord  Y    "y",
         makeWordRecord  ZOI  "zoi",
         MkWordRecord Brivla "broda" $ const $ MkWordPicture "broda" brodV brodaStubPositions
@@ -662,6 +670,9 @@ Show PictureStubLabel where
     show Around' = "I'"
     show SeltauStub = "st"
     show TertauStub = "tt"
+    show (Reroute s) = "rr:"++show s
+    show RerouteAny = "rr_"
+    show SeRerouteAny = "RR_"
 
 export
 Show WordPicture where

@@ -7,15 +7,12 @@ import GraphSubstitution
 
 import Control.Algebra
 import Data.SortedMap
+import Data.SortedSet
 import Data.Vect
 import Debug.Trace
 import Graphics.Color
 import Graphics.SDL2.SDL
 import Graphics.SDL2.SDLTTF
-
-maybeReverse : Reversable e => Bool -> e -> e
-maybeReverse False = id
-maybeReverse True  = reverse
 
 ProcessedWord : Type
 ProcessedWord = (Picture, SortedMap (NodeLabel, PictureStubLabel) Position)
@@ -29,22 +26,53 @@ combinePicturesWithoutOverlap (p0,ss0) (p1,ss1) = (p0 <+> Transformed t p1, merg
           dy = max 0 $ minShiftToDisjoint (pictureHull p0) (pictureHull p1)
           t = translateTransform [0,-1-dy]
 
+rerouteAtNode : NodeLabel -> SGraph PictureEdgeLabel WordPicture -> SGraph PictureEdgeLabel WordPicture
+rerouteAtNode nl g = fromMaybe g $ do
+    es <- map snd <$> getAdjEdges' g nl
+    guard (any (\((s,_),_) => case s of {Reroute _ => True; RerouteAny => True; _ => False}) es)
+    let (es1,rrs) = the (List (PictureEdgeLabel,NodeLabel), List (PictureStubLabel, (PictureStubLabel, NodeLabel))) $ partitionEithers $ (\((ns,fs),nl') => case ns of {Reroute s => Right (s,fs,nl'); _ => Left ((ns,fs),nl')}) <$> es
+    let rrs' = the (SortedMap PictureStubLabel (PictureStubLabel, NodeLabel)) $ fromList rrs
+    let (es2,newEdges0) = the (List (PictureEdgeLabel,NodeLabel),List (Edge PictureEdgeLabel)) $ partitionEithers $ (\((ns,fs),nl') => case (SortedMap.lookup ns rrs') of
+            Just (fs',nl'') => Right (MkEdge nl' nl'' (fs,fs'))
+            Nothing => Left ((ns,fs),nl')
+        ) <$> es1
+    let anyBackNodes = map Basics.snd $ filter (\((_,fs),_) => fs == RerouteAny) es2
+    anyBackNodes' <- for anyBackNodes (\nl' =>
+            (\ss => (nl',ss)) <$>
+            the (SortedSet PictureStubLabel) <$> fromList <$>
+            catMaybes <$>
+            map (\s => case s of {Reroute s' => Just s'; _ => Nothing}) <$>
+            map (\(_,(s,_),_) => s) <$>
+            getAdjEdges' g nl'
+        )
+    let newEdges1 = the (List (Edge PictureEdgeLabel)) $ catMaybes $ (\(s,fs,nl), (nl',ss) => if contains s ss then Nothing else Just (MkEdge nl' nl (Reroute s,fs))) <$> rrs <*> anyBackNodes'
+    let (es3, anyForwardNodes) = the (List (PictureEdgeLabel,NodeLabel),List NodeLabel) $ map (map Basics.snd) $ partition (\((s,_),_) => s /= RerouteAny) es2
+    let newEdges2 = case anyForwardNodes of
+        [] => []
+        (nl'::_) => map (\((ns,fs),nl'') => MkEdge nl' nl'' (ns,fs)) es3
+    pure $ foldl addEdge (deleteNode g nl) (newEdges0 ++ newEdges1 ++ newEdges2)
+
+applyReroutes : SGraph PictureEdgeLabel WordPicture -> SGraph PictureEdgeLabel WordPicture
+applyReroutes g = foldr rerouteAtNode g (keys $ nodeMap g)
+
 preProcessGraph : SGraph PictureEdgeLabel WordPicture -> SGraph (Edge PictureEdgeLabel) EitherWord
 preProcessGraph (MkSGraph ns es) = MkSGraph (map (\(n,els) => (Left n, els)) ns) (map (\(MkEdge n0 n1 e) => MkEdge n0 n1 (MkEdge n0 n1 e)) es)
 
 absorbLeaf : NodeLabel -> SGraph (Edge PictureEdgeLabel) ProcessedWord -> SGraph (Edge PictureEdgeLabel) ProcessedWord
-absorbLeaf nl g = fromMaybe g $ do
-    ((lPic, lStubs), lEdges) <- lookup nl $ nodeMap g
-    [(eRev, el)] <- the (Maybe (List (Bool,EdgeLabel))) $ case lEdges of {[_] => Just lEdges; _ => Nothing}
-    MkEdge _ pl (MkEdge ll' pl' (lStub, pStub)) <- maybeReverse eRev <$> lookup el (edgeMap g)
-    ((pPic, pStubs), pEdges) <- lookup pl $ nodeMap g
-    pure $ case (lookup (pl',pStub) pStubs, lookup (ll',lStub) lStubs) of
-        (Just pStubPos, Just lStubPos) => let
-                t = MkTransform (pStubPos <+> MkPosition [0,2] back <-> lStubPos) 1
-                pic = pPic <+> Transformed t lPic <+> Transformed (MkTransform pStubPos 1) (Line [0,0] [0,2])
-                stubs = pStubs <+> map (transformPosition t) lStubs
-            in record {nodeMap $= insert pl ((pic, stubs), filter ((/=el).snd) pEdges) . delete nl, edgeMap $= delete el} g
-        _ => record {edgeMap $= delete el} g
+absorbLeaf nl0 g = fromMaybe g $ do
+    (bPic, bStubs) <- getNode g nl0
+    es <- getAdjEdges' g nl0
+    esl <- the (Maybe $ List (Bool, Edge PictureEdgeLabel, NodeLabel)) $ for es (\(el,e,nl1) => (\b => (b,e,nl1)) <$> (/=1) <$> length <$> getAdjEdges g nl1)
+    let (esh, es') = map (map Basics.snd) $ partition fst esl
+    guard (length esh <= 1)
+    pics <- for es' (\(MkEdge nl0' nl1' (s0,s1),nl1) => do
+            (lPic, lStubs) <- getNode g nl1
+            bs <- lookup (nl0', s0) bStubs
+            ls <- lookup (nl1', s1) lStubs
+            pure $ Transformed (MkTransform bs 1) $ Line [0,0] [0,2] <+> Transformed (MkTransform (MkPosition [0,2] back <-> ls) 1) lPic
+        )
+    let g' = foldr (\(_,nl1), g0 => deleteNode g0 nl1) g es'
+    pure $ setNode g' nl0 (bPic <+> Pictures pics, bStubs)
     
 absorbLeaves : SGraph (Edge PictureEdgeLabel) ProcessedWord -> SGraph (Edge PictureEdgeLabel) ProcessedWord
 absorbLeaves g = let g' = foldr absorbLeaf g (keys $ nodeMap g) in
@@ -127,4 +155,4 @@ renderPicture p = do
 
 export
 renderPictureGraph : PictureGraph 0 -> IO ()
-renderPictureGraph = renderPicture . fst . processGraph . preProcessGraph . convertGraph
+renderPictureGraph = renderPicture . fst . processGraph . preProcessGraph . applyReroutes . convertGraph

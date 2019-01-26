@@ -87,11 +87,27 @@ maybeRelativeClauseJoin : PictureGraph 1 -> Maybe (PictureGraph 2) -> PictureGra
 maybeRelativeClauseJoin m (Just r) = relativeClauseJoin m r
 maybeRelativeClauseJoin m Nothing  = m
 
+joinSe : PictureGraph 1 -> PictureGraph 1 -> WordParser 1
+joinSe se p = uproot {i=2} {i'=1} <$> foldr (addEdge 0 1) (graphUnion se p) <$> edges <$> e1
+    where se' : String
+          se' = WordPicture'.string $ getRoot FZ se $ emptyContext []
+          e1 : Parser PictureStubLabel
+          e1 = case se' of
+              "se" => pure $ NumberedStub 1
+              "te" => pure $ NumberedStub 2
+              "ve" => pure $ NumberedStub 3
+              "xe" => pure $ NumberedStub 4
+              _ => fail "unrecognised SE"
+          e0 : PictureStubLabel
+          e0 = NumberedStub 0
+          edges : PictureStubLabel -> List PictureEdgeLabel
+          edges e1' = [(Reroute e0, e1'), (Reroute e1', e0), (RerouteAny, SeRerouteAny)]
+
 simpleStar : {n:Nat} -> Nat -> Nat -> PictureGraph (S n) -> PictureGraph 1 -> PictureGraph (S n)
 simpleStar a b h t = pictureTaggedStarGraph h [(a,b,t)]
 
 branch : WordParser 1 -> Parser (PictureGraph 1 -> PictureGraph 1 -> PictureGraph 1)
-branch r b0 b1 = flip pictureTaggedStarGraph [(1,0,b0),(2,0,b1)] <$> r
+branch = map (\r, b0, b1 => pictureTaggedStarGraph r [(1,0,b0),(2,0,b1)])
 
 bySelma'o : Selma'o -> WordParser 1
 bySelma'o s = join $ satisfyMaybe (\w => if wordSelma'o w == s then Just (pictureOf w) else Nothing)
@@ -216,7 +232,7 @@ mutual
         <|> (joinedTerms <* opt (bySelma'o VAU)) --TODO: work out what to do with the free modifiers here.
         <|> prenex
         <|> uproot {i=2} {i'=1} <$> relativeClauses
-        <|> linkArgs
+        --<|> linkArgs
     
     prenex : WordParser 1
     prenex = (<?> "prenex") $ flip (simpleStar 2 0) <$> withFree (bySelma'o ZOhU) <*> joinedTerms
@@ -238,7 +254,7 @@ mutual
     
     -- Multiple terms as a single node, for uses other than sentences.
     joinedTerms : WordParser 1
-    joinedTerms = pictureTaggedStarGraph confluencePicture <$> map (\s => (1,0,s)) <$> catMaybes <$> map snd <$> terms
+    joinedTerms = join <$> starGraph (Reroute (NumberedStub 0), NumberedStub 0) confluencePicture <$> (the (Parser (List (PictureGraph 1))) $ (catMaybes . map snd) <$> terms)
     
     tailTerms : Parser Terms
     tailTerms = (terms <|> pure []) <* opt (bySelma'o VAU)
@@ -374,7 +390,7 @@ mutual
         <|> (simpleStar 1 0 <$> withFree (bySelma'o ME) <*> lazy sumti <* opt (bySelma'o MEhU))
         <|> (simpleStar 1 0 <$> (number <|> lerfuString) <*> withFree (bySelma'o MOI))
         <|> fail "NUhA not yet implemented."
-        <|> (tanruJoin <$> withFree (bySelma'o SE) <*> lazy tanruUnit2)
+        <|> (join $ joinSe <$> bySelma'o SE <*> lazy tanruUnit2)
         <|> fail "JAI not yet implemented."
         <|> (flip freeJoin <$> withFree (bySelma'o NAhE) <*> lazy tanruUnit2)
         <|> (simpleStar 1 0 <$> withFree (bySelma'o NU) <*> lazy subsentence <* bySelma'o KEI) --TODO
@@ -405,7 +421,7 @@ mutual
     rpExpression = do
         t0 <- rpOperand
         t1 <- rpOperand
-        op <- binOperator
+        op <- branch operator
         pure $ op t0 t1
     
     rpOperand : WordParser 1
@@ -424,7 +440,7 @@ mutual
     
     mexOperator : WordParser 1
     mexOperator =
-        tanruJoin <$> withFree (bySelma'o SE) <*> lazy mexOperator
+        join (joinSe <$> bySelma'o SE <*> lazy mexOperator)
         <|> flip freeJoin <$> withFree (bySelma'o NAhE) <*> lazy mexOperator
         <|> fail "MAhO not yet implemented."
         <|> fail "NAhU not yet implemented."
@@ -491,7 +507,7 @@ mutual
     
     gek : Parser String
     gek = forethought GA
-      <|> withFree (joik <* bySelma'o GI)
+      <|> fail "joigik not yet implemented."
       <|> fail "gek from tags not yet implemented."
     
     guhek : Parser String

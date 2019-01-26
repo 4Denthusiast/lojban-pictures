@@ -122,7 +122,7 @@ join {i} {i'} (MkGraph r0 gs es0) = MkGraph (vectFlatten $ map (fromJust . flip 
           fromJust (Just x) = x --I know it's not Nothing in this case, assuming the input is valid.
           es0' = concatMap (adjustEdge' (fromJust . flip lookup rs)) es0
           adjustEdge' : (NodeLabel -> Vect i' NodeLabel) -> Edge e -> List (Edge e)
-          adjustEdge' f (MkEdge n0 n1 e) = toList $ (\n0', n1' => MkEdge n0' n1' e) <$> f n0 <*> f n1
+          adjustEdge' f (MkEdge n0 n1 ed) = toList $ (\n0', n1' => MkEdge n0' n1' ed) <$> f n0 <*> f n1
 
 export
 pure : n -> Graph 1 e n
