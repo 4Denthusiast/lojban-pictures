@@ -26,12 +26,9 @@ findWordPicture w = case getWordRecord w of
     Nothing => fail ("No such word: "++w)
     Just wr => pure $ pure $ picture wr
 
--- junction to indicate multiple nodes in the same place
-confluencePicture : PictureGraph 1
-confluencePicture = pure $ const $ MkWordPicture "." blankPicture $ \s => case s of
-    NumberedStub    Z  => Just $ MkPosition [0,0] neutral
-    NumberedStub (S Z) => Just $ MkPosition [0,0] back
-    _ => Nothing
+-- A pseudo-word that will be eliminated at the rerouting stage.
+dummyPicture : PictureGraph 1
+dummyPicture = pure $ const $ MkWordPicture "." blankPicture $ \s => Nothing
 
 quantifierPicture : PictureGraph 1
 quantifierPicture = pure $ const $ MkWordPicture "│├" (Line [0,-0.5] [0,0.5] <+> Line [0.2,-0.5] [0.2,0.5]) $ \s => case s of
@@ -47,6 +44,13 @@ bridiCircle = pure $ (. circumcircle . aroundShape) $ \(c, r) =>
         NumberedStub Z => Just $ MkPosition [0,r+0.5] neutral
         Around => Just $ MkPosition (inverse c) neutral
         _ => Nothing
+
+-- negation bubble to attach to conjunctions
+bubblePicture : PictureGraph 1
+bubblePicture = pure $ const $ MkWordPicture "¬" (Circle [0,0] 0.1) $ \s => case s of
+    NumberedStub    Z  => Just $ MkPosition [0,0.1] neutral
+    NumberedStub (S Z) => Just $ MkPosition [0,-0.1] back
+    _ => Nothing
 
 createNi'os : Nat -> WordParser 1
 createNi'os Z = findWordPicture "i"
@@ -87,21 +91,20 @@ maybeRelativeClauseJoin : PictureGraph 1 -> Maybe (PictureGraph 2) -> PictureGra
 maybeRelativeClauseJoin m (Just r) = relativeClauseJoin m r
 maybeRelativeClauseJoin m Nothing  = m
 
+swapStubs : Nat -> Nat -> PictureGraph 1 -> PictureGraph 1
+swapStubs s0 s1 p = uproot {i=2} {i'=1} $ foldr (addEdge 0 1) (graphUnion dummyPicture p) $ the (List _) [(Reroute (NumberedStub s0), NumberedStub s1), (Reroute (NumberedStub s1), NumberedStub s0), (RerouteAny, SeRerouteAny)]
+
 joinSe : PictureGraph 1 -> PictureGraph 1 -> WordParser 1
-joinSe se p = uproot {i=2} {i'=1} <$> foldr (addEdge 0 1) (graphUnion se p) <$> edges <$> e1
+joinSe se p = (\n' => swapStubs 0 n' p) <$> n
     where se' : String
           se' = WordPicture'.string $ getRoot FZ se $ emptyContext []
-          e1 : Parser PictureStubLabel
-          e1 = case se' of
-              "se" => pure $ NumberedStub 1
-              "te" => pure $ NumberedStub 2
-              "ve" => pure $ NumberedStub 3
-              "xe" => pure $ NumberedStub 4
+          n : Parser Nat
+          n = case se' of
+              "se" => pure $ 1
+              "te" => pure $ 2
+              "ve" => pure $ 3
+              "xe" => pure $ 4
               _ => fail "unrecognised SE"
-          e0 : PictureStubLabel
-          e0 = NumberedStub 0
-          edges : PictureStubLabel -> List PictureEdgeLabel
-          edges e1' = [(Reroute e0, e1'), (Reroute e1', e0), (RerouteAny, SeRerouteAny)]
 
 simpleStar : {n:Nat} -> Nat -> Nat -> PictureGraph (S n) -> PictureGraph 1 -> PictureGraph (S n)
 simpleStar a b h t = pictureTaggedStarGraph h [(a,b,t)]
@@ -131,6 +134,30 @@ formBridi s ts = permuteRoots (\[b,a] => [a]) $ flip (pictureTaggedStarGraph {n=
               FaTag n' => (mtags, add t n' 0 ntags, n'+1)
               NaTag => ?dealWithNaTagType
           ) ([],[],0) ts
+
+attachBubble : Nat -> PictureGraph 1 -> PictureGraph 1
+attachBubble n c = permuteRoots (\[d,b,c] => [d])
+    $ addEdge 0 1 (Reroute (NumberedStub n), NumberedStub 1)
+    $ addEdge 0 2 (RerouteAny, SeRerouteAny)
+    $ addEdge 1 2 (NumberedStub 0, NumberedStub n)
+    $ graphUnion dummyPicture (graphUnion bubblePicture c)
+
+makeLogical : Bool -> Bool -> Char -> Bool -> WordParser 1
+makeLogical na se a nai =
+    let (n, na', nai', a') = the (Bool, Bool, Bool, String) $ case (na, nai, a) of
+            (True,  True,  'a') => (True,  False, False, "e")
+            (True,  True,  'e') => (True,  False, False, "a")
+            (True,  True,  'o') => (True,  False, False, "o'")
+            (True,  False, 'o') => (False, False, False, "o'")
+            (False, True,  'o') => (False, False, False, "o'")
+            (False, False, 'o') => (True,  False, False, "o'")
+            _ => (False, na, nai, singleton a)
+    in (if n    then attachBubble 0 else id) <$>
+       (if na'  then attachBubble 1 else id) <$>
+       (if nai' then attachBubble 2 else id) <$>
+       (if se   then swapStubs 1 2  else id) <$>
+       findWordPicture a'
+
 
 mutual
     export
@@ -254,7 +281,7 @@ mutual
     
     -- Multiple terms as a single node, for uses other than sentences.
     joinedTerms : WordParser 1
-    joinedTerms = join <$> starGraph (Reroute (NumberedStub 0), NumberedStub 0) confluencePicture <$> (the (Parser (List (PictureGraph 1))) $ (catMaybes . map snd) <$> terms)
+    joinedTerms = join <$> starGraph (Reroute (NumberedStub 0), NumberedStub 0) dummyPicture <$> (the (Parser (List (PictureGraph 1))) $ (catMaybes . map snd) <$> terms)
     
     tailTerms : Parser Terms
     tailTerms = (terms <|> pure []) <* opt (bySelma'o VAU)
@@ -505,20 +532,17 @@ mutual
     joikJek : WordParser 1
     joikJek = withFree (joik <|> jek)
     
-    gek : Parser String
+    gek : Parser (PictureGraph 1, PictureGraph 1)
     gek = forethought GA
-      <|> fail "joigik not yet implemented."
+      <|> (\j => (attachBubble 2 j,j)) <$> lazy joik <* bySelma'o GI
       <|> fail "gek from tags not yet implemented."
     
-    guhek : Parser String
+    guhek : Parser (PictureGraph 1, PictureGraph 1)
     guhek = forethought GUhA
     
     -- Takes the first part of the conjunction (gek/guhek), and returns the completed picture.
-    gik : String -> WordParser 1
-    gik ge = do
-        bySelma'o GI
-        nai <- isJust <$> (opt $ bySelma'o NAI)
-        findWordPicture $ ge ++ (if nai then "nai" else "")
+    gik : (PictureGraph 1, PictureGraph 1) -> WordParser 1
+    gik ge = bySelma'o GI *> ((\b => if b then fst ge else snd ge) <$> isJust <$> opt (bySelma'o NAI))
     
     afterthought : Selma'o -> WordParser 1
     afterthought s = do
@@ -527,24 +551,22 @@ mutual
         a <- bySelma'o s
         nai <- isJust <$> opt (bySelma'o NAI)
         let a' = strHead $ reverse $ string $ getRoot FZ a $ emptyContext [] -- The letter for the logical function.
-        let se' = se && (a' == 'u')
-        findWordPicture $ (if na then "na" else "") ++ (if se' then "se" else "") ++ pack (the (List Char) ['*',a']) ++ (if nai then "nai" else "")
+        makeLogical na se a' nai
     
-    forethought : Selma'o -> Parser String
+    forethought : Selma'o -> Parser (PictureGraph 1, PictureGraph 1)
     forethought s = do
         se <- isJust <$> opt (bySelma'o SE)
         a <- bySelma'o s
         nai <- isJust <$> opt (bySelma'o NAI)
         let a' = strHead $ reverse $ string $ getRoot FZ a $ emptyContext []
-        let se' = se && (a' == 'u')
-        pure $ (if nai then "na" else "") ++ (if se' then "se" else "") ++ pack (the (List Char) ['*',a'])
+        MkPair <$> makeLogical nai se a' True <*> makeLogical nai se a' False
     
     nonLogical : Selma'o -> WordParser 1
     nonLogical s = do
         se <- isJust <$> opt (bySelma'o SE)
         a <- bySelma'o s
         nai <- opt $ bySelma'o NAI
-        se_a <- if se then findWordPicture ("se" ++ string (getRoot FZ a $ emptyContext [])) else pure a
+        let se_a = if se then swapStubs 1 2 a else a
         pure $ maybe se_a (freeJoin se_a) nai
     
     -- TODO

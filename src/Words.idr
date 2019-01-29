@@ -341,9 +341,9 @@ emptyStubPositions : StubPositions
 emptyStubPositions _ = Nothing
 
 cmavrxavoStubPositions : StubPositions
-cmavrxavoStubPositions (NumberedStub       Z  ) = Just $ MkPosition [ 0  , 0.2] neutral
-cmavrxavoStubPositions (NumberedStub    (S Z) ) = Just $ MkPosition [-0.4,-1.2] back
-cmavrxavoStubPositions (NumberedStub (S (S Z))) = Just $ MkPosition [ 0.4,-1.2] back
+cmavrxavoStubPositions (NumberedStub       Z  ) = Just $ MkPosition [ 0  , 0] neutral
+cmavrxavoStubPositions (NumberedStub    (S Z) ) = Just $ MkPosition [-0.4,-1] back
+cmavrxavoStubPositions (NumberedStub (S (S Z))) = Just $ MkPosition [ 0.4,-1] back
 cmavrxavoStubPositions _ = Nothing
 
 -- ne, pe, po and po'e, not po'u, no'u or goi.
@@ -401,6 +401,8 @@ stubPositionsBySelma'o : Selma'o -> StubPositions
 stubPositionsBySelma'o A    = cmavrxavoStubPositions
 stubPositionsBySelma'o BU   = cmavrpaStubPositions
 stubPositionsBySelma'o FA   = emptyStubPositions
+stubPositionsBySelma'o GA   = cmavrxavoStubPositions
+stubPositionsBySelma'o GI   = emptyStubPositions
 stubPositionsBySelma'o GOI  = cmavrgoiStubPositions
 stubPositionsBySelma'o I    = cmavrxivoStubPositions
 stubPositionsBySelma'o KOhA = cmavrko'aStubPositions
@@ -455,43 +457,6 @@ namespace pictureLib
      <+> Line [-0.1,-1] [0.4,-1]
      <+> Line [0.4,-1] [0.4,-0.6]
      <+> Bezier [[-0.4,-0.3],[-0.4,0.1],[0.4,0.1],[0.4,-0.3]]
-    
-    se_u : Picture
-    se_u = Line [0.4,-0.3] [0.4,-1]
-       <+> Line [0.1,-1] [-0.4,-1]
-       <+> Line [-0.4,-1] [-0.4,-0.6]
-       <+> Bezier [[-0.4,-0.3],[-0.4,0.1],[0.4,0.1],[0.4,-0.3]]
-    
-    A_arg1Pos : Picture
-    A_arg1Pos = Line [-0.4,-1] [-0.4,-1.2]
-    
-    A_arg2Pos : Picture
-    A_arg2Pos = Line [ 0.4,-1] [ 0.4,-1.2]
-    
-    A_headPos : Picture
-    A_headPos = Line [0,0] [0,0.2]
-    
-    A_arg1Neg : Picture
-    A_arg1Neg = Circle [-0.4,-1.1] 0.1
-    
-    A_arg2Neg : Picture
-    A_arg2Neg = Circle [ 0.4,-1.1] 0.1
-    
-    A_headNeg : Picture
-    A_headNeg = Circle [0,0.1] 0.1
-    
-    -- no little circles for negation
-    A_allPos : Picture
-    A_allPos = A_headPos <+> A_arg1Pos <+> A_arg2Pos
-    
-    A_neg0 : Picture
-    A_neg0 = A_headNeg <+> A_arg1Pos <+> A_arg2Pos
-    
-    A_neg1 : Picture
-    A_neg1 = A_headPos <+> A_arg1Neg <+> A_arg2Pos
-    
-    A_neg2 : Picture
-    A_neg2 = A_headPos <+> A_arg1Pos <+> A_arg2Neg
     
     -- GOI
     
@@ -563,30 +528,11 @@ namespace pictureLib
 
 wordRecords : SortedMap String WordRecord
 wordRecords = foldr (\w, t => insert (string w) w t) empty $ partialId [
-        makeWordRecord  A    "a",
-        makeWordRecord  A    "e",
-        makeWordRecord  A    "o",
-        makeWordRecord  A    "u",
-        makeWordRecord' A    "*a" $ a <+> A_allPos,
-        makeWordRecord' A    "na*a" $ a <+> A_neg1,
-        makeWordRecord' A    "*anai" $ a <+> A_neg2,
-        makeWordRecord' A    "na*anai" $ e <+> A_neg0,
-        makeWordRecord' A    "*e" $ e <+> A_allPos,
-        makeWordRecord' A    "na*e" $ e <+> A_neg1,
-        makeWordRecord' A    "*enai" $ e <+> A_neg2,
-        makeWordRecord' A    "na*enai" $ a <+> A_neg0,
-        makeWordRecord' A    "*o" $ o <+> A_neg0,
-        makeWordRecord' A    "na*o" $ o <+> A_allPos,
-        makeWordRecord' A    "*onai" $ o <+> A_allPos,
-        makeWordRecord' A    "na*onai" $ o <+> A_neg0,
-        makeWordRecord' A    "*u" $ u <+> A_allPos,
-        makeWordRecord' A    "na*u" $ u <+> A_neg0,
-        makeWordRecord' A    "*unai" $ u <+> A_allPos,
-        makeWordRecord' A    "na*unai" $ u <+> A_neg0,
-        makeWordRecord' A    "se*u" $ se_u <+> A_allPos,
-        makeWordRecord' A    "nase*u" $ se_u <+> A_allPos,
-        makeWordRecord' A    "se*unai" $ se_u <+> A_neg0,
-        makeWordRecord' A    "nase*unai" $ se_u <+> A_neg0,
+        makeWordRecord' A    "a" $ a,
+        makeWordRecord' A    "e" $ e,
+        makeWordRecord  A    "o", -- The default of this includes a negation bubble.
+        makeWordRecord' A    "o'" $ o,
+        makeWordRecord' A    "u" $ u,
         makeWordRecord  BU   "bu",
         makeWordRecord  FA   "fa",
         makeWordRecord  FA   "fe",
