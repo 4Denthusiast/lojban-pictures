@@ -29,27 +29,27 @@ combinePicturesWithoutOverlap (p0,ss0) (p1,ss1) = (p0 <+> Transformed t p1, merg
 rerouteAtNode : NodeLabel -> SGraph PictureEdgeLabel WordPicture -> SGraph PictureEdgeLabel WordPicture
 rerouteAtNode nl g = fromMaybe g $ do
     es <- map snd <$> getAdjEdges' g nl
-    guard (any (\((s,_),_) => case s of {Reroute _ => True; RerouteAny => True; _ => False}) es)
-    let (es1,rrs) = the (List (PictureEdgeLabel,NodeLabel), List (PictureStubLabel, (PictureStubLabel, NodeLabel))) $ partitionEithers $ (\((ns,fs),nl') => case ns of {Reroute s => Right (s,fs,nl'); _ => Left ((ns,fs),nl')}) <$> es
+    guard (any (\((s,_,_),_) => case s of {Reroute _ => True; RerouteAny => True; _ => False}) es)
+    let (es1,rrs) = the (List (PictureEdgeLabel,NodeLabel), List (PictureStubLabel, (PictureStubLabel, NodeLabel))) $ partitionEithers $ (\((ns,f,fs),nl') => case ns of {Reroute s => Right (s,fs,nl'); _ => Left ((ns,f,fs),nl')}) <$> es
     let rrs' = the (SortedMap PictureStubLabel (PictureStubLabel, NodeLabel)) $ fromList rrs
-    let (es2,newEdges0) = the (List (PictureEdgeLabel,NodeLabel),List (Edge PictureEdgeLabel)) $ partitionEithers $ (\((ns,fs),nl') => case (SortedMap.lookup ns rrs') of
-            Just (fs',nl'') => Right (MkEdge nl' nl'' (fs,fs'))
-            Nothing => Left ((ns,fs),nl')
+    let (es2,newEdges0) = the (List (PictureEdgeLabel,NodeLabel),List (Edge PictureEdgeLabel)) $ partitionEithers $ (\((ns,f,fs),nl') => case (SortedMap.lookup ns rrs') of
+            Just (fs',nl'') => Right (MkEdge nl' nl'' (fs,f,fs'))
+            Nothing => Left ((ns,f,fs),nl')
         ) <$> es1
-    let anyBackNodes = map Basics.snd $ filter (\((_,fs),_) => fs == RerouteAny) es2
+    let anyBackNodes = map Basics.snd $ filter (\((_,_,fs),_) => fs == RerouteAny) es2
     anyBackNodes' <- for anyBackNodes (\nl' =>
             (\ss => (nl',ss)) <$>
             the (SortedSet PictureStubLabel) <$> fromList <$>
             catMaybes <$>
             map (\s => case s of {Reroute s' => Just s'; _ => Nothing}) <$>
-            map (\(_,(s,_),_) => s) <$>
+            map (\(_,(s,_,_),_) => s) <$>
             getAdjEdges' g nl'
         )
-    let newEdges1 = the (List (Edge PictureEdgeLabel)) $ catMaybes $ (\(s,fs,nl), (nl',ss) => if contains s ss then Nothing else Just (MkEdge nl' nl (Reroute s,fs))) <$> rrs <*> anyBackNodes'
-    let (es3, anyForwardNodes) = the (List (PictureEdgeLabel,NodeLabel),List NodeLabel) $ map (map Basics.snd) $ partition (\((s,_),_) => s /= RerouteAny) es2
+    let newEdges1 = the (List (Edge PictureEdgeLabel)) $ catMaybes $ (\(s,fs,nl), (nl',ss) => if contains s ss then Nothing else Just (MkEdge nl' nl (Reroute s,False,fs))) <$> rrs <*> anyBackNodes'
+    let (es3, anyForwardNodes) = the (List (PictureEdgeLabel,NodeLabel),List NodeLabel) $ map (map Basics.snd) $ partition (\((s,_,_),_) => s /= RerouteAny) es2
     let newEdges2 = case anyForwardNodes of
         [] => []
-        (nl'::_) => map (\((ns,fs),nl'') => MkEdge nl' nl'' (ns,fs)) es3
+        (nl'::_) => map (\((ns,f,fs),nl'') => MkEdge nl' nl'' (ns,f,fs)) es3
     pure $ foldl addEdge (deleteNode g nl) (newEdges0 ++ newEdges1 ++ newEdges2)
 
 applyReroutes : SGraph PictureEdgeLabel WordPicture -> SGraph PictureEdgeLabel WordPicture
@@ -65,11 +65,13 @@ absorbLeaf nl0 g = fromMaybe g $ do
     esl <- the (Maybe $ List (Bool, Edge PictureEdgeLabel, NodeLabel)) $ for es (\(el,e,nl1) => (\b => (b,e,nl1)) <$> (/=1) <$> length <$> getAdjEdges g nl1)
     let (esh, es') = map (map Basics.snd) $ partition fst esl
     guard (length esh <= 1)
-    pics <- for es' (\(MkEdge nl0' nl1' (s0,s1),nl1) => do
+    pics <- for es' (\(MkEdge nl0' nl1' (s0,f,s1),nl1) => do
             (lPic, lStubs) <- getNode g nl1
             bs <- lookup (nl0', s0) bStubs
             ls <- lookup (nl1', s1) lStubs
-            pure $ Transformed (MkTransform bs 1) $ Line [0,0] [0,2] <+> Transformed (MkTransform (MkPosition [0,2] back <-> ls) 1) lPic
+            pure $ Transformed (MkTransform bs 1) $ if f
+                then Transformed (MkTransform (MkPosition [0,0] back <-> ls) 1) lPic
+                else Line [0,0] [0,2] <+> Transformed (MkTransform (MkPosition [0,2] back <-> ls) 1) lPic
         )
     let g' = foldr (\(_,nl1), g0 => deleteNode g0 nl1) g es'
     pure $ setNode g' nl0 (bPic <+> Pictures pics, bStubs)

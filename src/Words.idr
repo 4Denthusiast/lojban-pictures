@@ -289,9 +289,10 @@ export
 implementation Ord PictureStubLabel where
     compare s s' = compare (pictureStubNumeral s) (pictureStubNumeral s')
 
+-- The part of the word to connect to on each end, and whether it'a a fixed attachment (True) or there's a line (False).
 public export
 PictureEdgeLabel : Type
-PictureEdgeLabel = (PictureStubLabel, PictureStubLabel)
+PictureEdgeLabel = (PictureStubLabel, Bool, PictureStubLabel)
 
 public export
 StubPositions : Type

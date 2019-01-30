@@ -143,12 +143,12 @@ PictureGraph i = Graph i PictureEdgeLabel WordPicture
 
 export
 Reversable PictureEdgeLabel where
-    reverse (x,y) = (y,x)
+    reverse (x,f,y) = (y,f,x)
 
 export
 enclosePicture : {i:Nat} -> PictureGraph 1 -> PictureGraph i -> PictureGraph (S i)
 enclosePicture {i} a b = case (graphUnion a b') of
-        MkGraph (r::r'::rs) ns es => MkGraph (r::rs) ns (es ++ map (\n => MkEdge r n (Around,Inside)) (filter (>= r') $ map fst $ toList $ ns))
+        MkGraph (r::r'::rs) ns es => MkGraph (r::rs) ns (es ++ map (\n => MkEdge r n (Around,False,Inside)) (filter (>= r') $ map fst $ toList $ ns))
     where b' : PictureGraph (1+i)
           b' = (\(MkGraph rs ns es) => MkGraph (0::rs) ns es) b
 
