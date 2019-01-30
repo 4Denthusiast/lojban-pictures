@@ -294,6 +294,23 @@ public export
 PictureEdgeLabel : Type
 PictureEdgeLabel = (PictureStubLabel, Bool, PictureStubLabel)
 
+-- Common cases, for convenience.
+export
+NumberedEdge : Nat -> Nat -> PictureEdgeLabel
+NumberedEdge n0 n1 = (NumberedStub n0, False, NumberedStub n1)
+export
+FixedEdge : Nat -> Nat -> PictureEdgeLabel
+FixedEdge n0 n1 = (NumberedStub n0, True, NumberedStub n1)
+export
+RerouteEdge : Nat -> Nat -> PictureEdgeLabel
+RerouteEdge n0 n1 = (Reroute (NumberedStub n0), False, NumberedStub n1)
+export
+RerouteAnyEdge : PictureEdgeLabel
+RerouteAnyEdge = (RerouteAny, False, SeRerouteAny)
+export
+FreeEdge : PictureEdgeLabel
+FreeEdge = (FreeStub, False, SeFreeStub)
+
 public export
 StubPositions : Type
 StubPositions = PictureStubLabel -> Maybe Position
@@ -354,12 +371,6 @@ cmavrgoiStubPositions (NumberedStub    (S Z) ) = Just $ MkPosition [0,-1] back
 cmavrgoiStubPositions (NumberedStub (S (S Z))) = Just $ MkPosition [1,0] right
 cmavrgoiStubPositions _ = Nothing
 
-cmavrxivoStubPositions : StubPositions
-cmavrxivoStubPositions (NumberedStub       Z  ) = Just $ MkPosition [-0.5,0] left
-cmavrxivoStubPositions (NumberedStub    (S Z) ) = Just $ MkPosition [ 0.5,0] right
-cmavrxivoStubPositions (NumberedStub (S (S Z))) = Just $ MkPosition [ 0  ,0] back
-cmavrxivoStubPositions _ = Nothing
-
 cmavrko'aStubPositions : StubPositions
 cmavrko'aStubPositions (NumberedStub Z) = Just $ MkPosition [0,0] neutral
 cmavrko'aStubPositions _ = Nothing
@@ -368,6 +379,14 @@ cmavrleStubPositions : StubPositions
 cmavrleStubPositions (NumberedStub    Z ) = Just $ MkPosition [0,0.5] neutral
 cmavrleStubPositions (NumberedStub (S Z)) = Just $ MkPosition [0,-1 ] back
 cmavrleStubPositions _ = Nothing
+
+cmavrni'oStubPositions : StubPositions
+cmavrni'oStubPositions (NumberedStub       Z  ) = Just $ MkPosition [-0.5,0] left
+cmavrni'oStubPositions (NumberedStub    (S Z) ) = Just $ MkPosition [ 0.5,0] right
+cmavrni'oStubPositions (NumberedStub (S (S Z))) = Just $ MkPosition [ 0  ,0] back
+cmavrni'oStubPositions (NumberedStub (S(S(S Z)))) = Just $ MkPosition [0,0.3] neutral
+cmavrni'oStubPositions (NumberedStub (S(S(S(S Z))))) = Just $ MkPosition [0,0] back
+cmavrni'oStubPositions _ = Nothing
 
 cmavrnoiStubPositions : StubPositions
 cmavrnoiStubPositions (NumberedStub       Z  ) = Just $ MkPosition [0,0.5] neutral
@@ -405,14 +424,14 @@ stubPositionsBySelma'o FA   = emptyStubPositions
 stubPositionsBySelma'o GA   = cmavrxavoStubPositions
 stubPositionsBySelma'o GI   = emptyStubPositions
 stubPositionsBySelma'o GOI  = cmavrgoiStubPositions
-stubPositionsBySelma'o I    = cmavrxivoStubPositions
+stubPositionsBySelma'o I    = cmavrni'oStubPositions
 stubPositionsBySelma'o KOhA = cmavrko'aStubPositions
 stubPositionsBySelma'o KU   = emptyStubPositions
 stubPositionsBySelma'o LE   = cmavrleStubPositions
 stubPositionsBySelma'o LI   = cmavrleStubPositions
 stubPositionsBySelma'o NA   = cmavruiStubPositions
 stubPositionsBySelma'o NAI  = cmavruiStubPositions
-stubPositionsBySelma'o NIhO = cmavrxivoStubPositions
+stubPositionsBySelma'o NIhO = cmavrni'oStubPositions
 stubPositionsBySelma'o NOI  = cmavrnoiStubPositions
 stubPositionsBySelma'o PA   = cmavrpaStubPositions
 stubPositionsBySelma'o SE   = emptyStubPositions
@@ -489,6 +508,18 @@ namespace pictureLib
     
     le : Picture
     le = lo <+> Dot [0,0]
+    
+    -- NIhO
+    
+    ni'o : Picture
+    ni'o = Bezier [[0,0],[0,-0.5],[-0.7,0],[-0.7,-0.5]] <+>
+           Bezier [[0,0],[0,-0.5],[ 0.7,0],[ 0.7,-0.5]]
+    
+    ni'oBase : Picture
+    ni'oBase = Line [-0.5,0] [0.5,0] <+> ni'o
+    
+    ni'oMod : Picture
+    ni'oMod = Line [0,0] [0,0.3] <+> ni'o
     
     -- NOI
     
@@ -567,10 +598,7 @@ wordRecords = foldr (\w, t => insert (string w) w t) empty $ partialId [
             Bezier [[0.3,-0.8],[0.5,-0.8],[0.7,-0.6],[0.7,-0.4]],
         makeWordRecord  NAI  "nai",
         makeWordRecord  NA   "na",
-        makeWordRecord' NIhO "ni'o" $
-            Line [-0.5,0] [0.5,0] <+>
-            Bezier [[0,0],[0,-0.5],[-0.7,0],[-0.7,-0.5]] <+>
-            Bezier [[0,0],[0,-0.5],[ 0.7,0],[ 0.7,-0.5]],
+        MkWordRecord NIhO "ni'o" $ (\(MkWordContext _ _ ss) => MkWordPicture "ni'o" (if elem (NumberedStub 3) ss then ni'oMod else ni'oBase) cmavrni'oStubPositions),
         makeWordRecord  NIhO "no'i",
         makeWordRecord' NOI  "poi" $ poi,
         makeWordRecord' PA   "no"  $ no,
