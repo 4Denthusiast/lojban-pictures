@@ -6,7 +6,7 @@ import Data.Vect
 import Debug.Trace
 import Graphics.Color
 import Graphics.SDL2.SDL
-import Graphics.SDL2.GFX
+import Graphics.SDL2.SDLGFX
 import Graphics.SDL2.SDLTTF
 
 %access public export
@@ -222,6 +222,9 @@ triangleCircumcircle [ax,ay] [bx,by] [cx,cy] = ([px, py], hypot (ax-px) (ay-py))
           px = (a2*(by-cy)+b2*(cy-ay)+c2*(ay-by))/d
           py = (a2*(cx-bx)+b2*(ax-cx)+c2*(bx-ax))/d
 
+dot : Point -> Point -> Double
+dot p p' = sum $ zipWith (*) p p'
+
 export
 circumcircle : ConvexHull -> (Point, Double)
 circumcircle (MkHull []) = ([0,0],0) -- The position is arbitrary.
@@ -232,8 +235,6 @@ circumcircle (MkHull (p0::ps')) = twoPoint p1 p2
           ps = p0::ps'
           dist2 : Point -> Point -> Double
           dist2 p p' = sum $ map (\c => c*c) $ p <-> p'
-          dot : Point -> Point -> Double
-          dot p p' = sum $ zipWith (*) p p'
           minBy : Ord b => List Point -> (Point -> b) -> Point
           minBy ps' f = snd $ foldr max (f p0, p0) (map (\p => (f p, p)) (ps \\ ps'))
           p1 = minBy [p0] (negate . dist2 p0)
@@ -244,6 +245,16 @@ circumcircle (MkHull (p0::ps')) = twoPoint p1 p2
               else if dot (p'<->p'') (p'<->p ) < 0 then twoPoint p'' p
               else if dot (p <->p'') (p <->p') < 0 then twoPoint p'' p'
               else triangleCircumcircle p p' p''
+
+splitBezier : Vect n Point -> Double -> (Vect n Point, Vect n Point)
+splitBezier {n=Z} [] t = ([],[])
+splitBezier {n=S m} ps t = let (ps0,ps1) = splitBezier (zipWith lerp (init ps) (tail ps)) t in (head ps :: ps0, replace {P=flip Vect Point} (plusCommutative m 1) (ps1 ++ [last ps]))
+    where lerp : Point -> Point -> Point
+          lerp [x,y] [x',y'] = [t*x + (1-t)*x', t*y + (1-t)*y']
+
+subdivideBezier : Vect (S n) Point -> List (Vect (S n) Point)
+subdivideBezier ps = if (all (\p => dot (p <-> head ps) (p <-> last ps) <= 0) ps) then [ps] else
+    let (ps0, ps1) = splitBezier ps 0.5 in subdivideBezier ps0 ++ subdivideBezier ps1
 
 data Picture : Type where
     Dot : Point -> Picture
@@ -257,7 +268,7 @@ data Picture : Type where
 pictureHull : Picture -> ConvexHull
 pictureHull (Dot p) = makeHull [p]
 pictureHull (Line p p') = makeHull [p,p']
-pictureHull (Bezier ps) = makeHull $ toList ps
+pictureHull (Bezier ps) = makeHull $ concat $ map toList $ subdivideBezier ps
 pictureHull (Circle p r) = transformHull (MkTransform (MkPosition p neutral) (r/y)) $ makeHull $ [[1,0],[0.5,-y],[-0.5,-y],[-1,0],[-0.5,y],[0.5,y]]
     where y = sqrt 3 / 2
 pictureHull (Text s) = let l = cast (length s) / 4 in makeHull [[-l,0],[0,l],[l,0],[0,-l]] -- I don't have any good estimate for text's size.
@@ -276,6 +287,15 @@ Show Picture where
 transformToInt : Transform -> Point -> Vect 2 Int
 transformToInt t = liftA2 (*) [1,-1] . map (cast . (+0.5)) . applyTransform t
 
+strokeLines : SDLRenderer -> List (Vect 2 Int) -> Int -> Int -> Int -> Int -> IO()
+strokeLines rend ps r g b a = sequence_ $ the (List (IO ())) $ zipWith (\[x0,y0], [x1,y1] => strokeLine rend x0 y0 x1 y1 r g b a) ps (drop 1 ps)
+
+drawBezier : Transform -> SDLRenderer -> Vect 4 Point -> IO ()
+drawBezier t rend ps = let
+        [xs,ys] = transpose $ map (transformToInt t) ps
+    in do --strokeLines rend (toList $ map (transformToInt t) ps) 255 0 0 255
+          strokeBezier rend xs ys 6 0 0 0 255
+
 draw : Transform -> SDLRenderer -> SDLFont -> Picture -> IO ()
 draw t rend font (Dot p) = let
         [x,y] = transformToInt t p
@@ -284,9 +304,7 @@ draw t rend font (Line e0 e1) = let
         [x0,y0] = transformToInt t e0
         [x1,y1] = transformToInt t e1
     in strokeLine rend x0 y0 x1 y1 0 0 0 255
-draw t rend font (Bezier ps) = let
-        [xs,ys] = transpose $ map (transformToInt t) ps
-    in strokeBezier rend xs ys 6 0 0 0 255
+draw t rend font (Bezier ps) = sequence_ $ map (drawBezier t rend) (subdivideBezier ps)
 draw t rend font (Circle c r) = let
         [x,y] = transformToInt t c
         r' = cast $ r * scale t
