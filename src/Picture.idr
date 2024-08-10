@@ -6,7 +6,7 @@ import Data.Vect
 import Debug.Trace
 import Graphics.Color
 import Graphics.SDL2.SDL
-import Graphics.SDL2.GFX
+import Graphics.SDL2.SDLGFX
 import Graphics.SDL2.SDLTTF
 
 %access public export

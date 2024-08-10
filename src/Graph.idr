@@ -153,10 +153,6 @@ enclosePicture {i} a b = case (graphUnion a b') of
           b' = (\(MkGraph rs ns es) => MkGraph (0::rs) ns es) b
 
 export
-(Show k, Show v) => Show (SortedMap k v) where
-    showPrec d m = showCon d "fromList" $ showArg (toList m)
-
-export
 (Show e) => Show (Edge e) where
     show (MkEdge n0 n1 e) = show n0 ++ "--" ++ show e ++ "--" ++ show n1
 
