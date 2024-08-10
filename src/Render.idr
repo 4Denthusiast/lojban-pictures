@@ -129,7 +129,7 @@ normalisePlacementTransform p = let (c, r) = circumcircle $ pictureHull p
 
 renderPicture : Picture -> IO ()
 renderPicture p = do
-        (ctx, rend) <- startSDL "Pretty lojban" 600 600
+        (ctx, rend) <- startSDL "Pretty lojban" 600 600 [SDL_WINDOW_RESIZABLE]
         font <- ttfOpenFont "/usr/share/fonts/truetype/freefont/FreeSans.ttf" 15
         loop rend font True (MkState (MkTransform (MkPosition [300,300] neutral) 300 <+> normalisePlacementTransform p) [0,0])
         ttfCloseFont font
