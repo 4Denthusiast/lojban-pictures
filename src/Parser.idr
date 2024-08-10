@@ -127,8 +127,9 @@ bySelma'o s = join $ satisfyMaybe (\w => if wordSelma'o w == s then Just (pictur
           pictureOf (MagicWordZEI w w') = ?pictureOfZEI w w'
           pictureOf (MagicWordLOhU ws) = ?pictureOfLOhU ws
 
-formBridi : PictureGraph 1 -> Terms -> PictureGraph 1
-formBridi s ts = permuteRoots (\[b,a] => [a]) $ flip (pictureTaggedStarGraph {n=1}) (fst $ snd processedTerms) $ permuteRoots (\[a,b] => [b,a]) $ enclosePicture (pictureTaggedStarGraph bridiCircle (fst processedTerms)) s
+-- TODO: implement the rule that if you cmavrfa to a position before an earlier term, then add more untagged terms, any pre-existing ones are skipped.
+formBridi : PictureGraph 1 -> Terms -> Terms -> PictureGraph 1
+formBridi s ts0 ts1 = permuteRoots (\[b,a] => [a]) $ flip (pictureTaggedStarGraph {n=1}) (fst $ snd processedTerms) $ permuteRoots (\[a,b] => [b,a]) $ enclosePicture (pictureTaggedStarGraph bridiCircle (fst processedTerms)) s
     where add : Maybe a -> Nat -> Nat -> List (Nat,Nat,a) -> List (Nat,Nat,a)
           add Nothing _ _ xs = xs
           add (Just x) n n' xs = (n,n',x)::xs
@@ -138,7 +139,7 @@ formBridi s ts = permuteRoots (\[b,a] => [a]) $ flip (pictureTaggedStarGraph {n=
               PlainTag => (mtags, add t n 0 ntags, n+1)
               FaTag n' => (mtags, add t n' 0 ntags, n'+1)
               NaTag => ?dealWithNaTagType
-          ) ([],[],0) ts
+          ) ([],[],if (isNil ts0) then 1 else 0) (ts0 ++ ts1)
 
 attachBubble : Nat -> PictureGraph 1 -> PictureGraph 1
 attachBubble n c = permuteRoots (\[d,b,c] => [d])
@@ -282,7 +283,7 @@ mutual
     bridiTail ts0 = (<?> "bridi-tail") $ do
         (s, ts1) <- selbri
         ts2 <- tailTerms
-        pure $ formBridi s (ts0 ++ ts1 ++ ts2)
+        pure $ formBridi s ts0 (ts1 ++ ts2)
     
     -- Multiple terms as a single node, for uses other than sentences.
     joinedTerms : WordParser 1
