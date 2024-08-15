@@ -4,6 +4,7 @@ import Picture
 import Words
 import Graph
 import GraphSubstitution
+import VectorToPixel
 
 import Control.Algebra
 import Data.SortedMap
@@ -118,42 +119,76 @@ record DisplayState where
     constructor MkState
     transform : Transform
     mousePos : Point
-
-Eq DisplayState where
-    (==) (MkState t p) (MkState t' p') = t == t' && p == p'
+    texture : (SDLTexture,(Int,Int))
 
 -- A transform so that the picture fits within the unit circle (with a margin)
 normalisePlacementTransform : Picture -> Transform
 normalisePlacementTransform p = let (c, r) = circumcircle $ pictureHull p
     in scaleTransform (1/(r+1)) <+> translateTransform (inverse c)
 
+address : Int -> Int -> Int -> Int -> Maybe Int
+address w h x y = if x >= 0 && x < w && y >= 0 && y < h then Just (4*(x+w*y)) else Nothing
+
+writeRawTex : Ptr -> Int -> Int -> Int -> Int -> (Bits8,Bits8,Bits8) -> IO ()
+writeRawTex txp w h x y (r,g,b) = case address w h x y of
+    Nothing => pure ()
+    Just i => do
+        prim_poke8 txp (i+2) r
+        prim_poke8 txp (i+1) g
+        prim_poke8 txp (i+0) b
+        pure ()
+
+readRawTex : Ptr -> Int -> Int -> Int -> Int -> IO (Bits8,Bits8,Bits8)
+readRawTex txp w h x y = case address w h x y of
+    Nothing => pure (0,0,0)
+    Just i => do
+        r <- prim_peek8 txp (i+2)
+        g <- prim_peek8 txp (i+1)
+        b <- prim_peek8 txp (i+0)
+        pure (r,g,b)
+
 renderPicture : Picture -> IO ()
 renderPicture p = do
-        (ctx, rend) <- startSDL "Pretty lojban" 600 600 [SDL_WINDOW_RESIZABLE]
+        (window, rend) <- startSDL "Pretty lojban" 600 600 [SDL_WINDOW_RESIZABLE]
         font <- ttfOpenFont "/usr/share/fonts/truetype/freefont/FreeSans.ttf" 15
-        loop rend font True (MkState (MkTransform (MkPosition [300,300] neutral) 300 <+> normalisePlacementTransform p) [0,0])
+        tx <- makeTexture window rend
+        loop window rend font True (MkState (MkTransform (MkPosition [300,300] neutral) 300 <+> normalisePlacementTransform p) [0,0] tx)
         ttfCloseFont font
-        endSDL ctx rend
-    where updateState : DisplayState -> Event -> DisplayState
-          updateState s (MouseMotion x y x' y') = record {mousePos = [cast x, 600-cast y]} s
-          updateState s (MouseWheel n) = record {transform $= (<+>) (translateTransform (mousePos s) <+> scaleTransform (exp $ cast n * 0.2) <-> translateTransform (mousePos s))} s
-          updateState s _ = s
+        endSDL window rend
+    where makeTexture : SDLWindow -> SDLRenderer -> IO (SDLTexture,(Int,Int))
+          makeTexture window rend = do
+              (w,h) <- getWindowSize window
+              tx <- sdlCreateTexture rend SDL_PIXELFORMAT_RGB888 SDL_TEXTUREACCESS_STREAMING w h
+              pure (tx,(w,h))
+          updateState : SDLWindow -> SDLRenderer -> (Bool, DisplayState) -> Event -> IO (Bool, DisplayState)
+          updateState _ _ (d,s) (MouseMotion x y x' y') = pure (d, record {mousePos = [cast x, cast y]} s)
+          updateState _ _ (d,s) (MouseWheel n) = pure (True, record {transform $= (<+>) (translateTransform (mousePos s) <+> scaleTransform (exp $ cast n * 0.2) <-> translateTransform (mousePos s))} s)
+          updateState w r (d,s) (Resize _ _) = do
+              sdlDestroyTexture $ fst $ texture s
+              tx <- makeTexture w r
+              pure (True, record {texture = tx} s)
+          updateState _ _ s _ = pure s
           pollEvents : Maybe Event -> IO (List Event)
           pollEvents Nothing = pure []
           pollEvents (Just ev) = map (ev ::) $ pollEvent >>= pollEvents
-          loop : SDLRenderer -> SDLFont -> Bool -> DisplayState -> IO ()
-          loop rend font refresh s = do
+          loop : SDLWindow -> SDLRenderer -> SDLFont -> Bool -> DisplayState -> IO ()
+          loop window rend font refresh s = do
               if refresh then do
-                  sdlSetRenderDrawColor rend 255 255 255 255
-                  sdlRenderClear rend
-                  draw (translateTransform [0,-600] <+> transform s) rend font p
+                  (MkTextureRaw txp pitch) <- lockTexture $ fst $ texture s
+                  let (w,h) = snd $ texture s
+                  for_ [0..(w-1)] (\x => for_ [0..(h-1)] (\y => writeRawTex txp w h x y (255,255,255)))
+                  -- Consider writing everything to a Data.IOArray first. It might be more efficient.
+                  --drawRaw 1 neutral (readRawTex txp w h) (writeRawTex txp w h) w h font (Bezier [[10,10],[10,590],[590,590],[590,10]])
+                  drawRaw (scale $ transform s) (transform s) (readRawTex txp w h) (writeRawTex txp w h) w h font p
+                  unlockTexture $ fst $ texture s
+                  renderCopyFull rend (fst $ texture s)
                   renderPresent rend
               else pure ()
               ev0 <- waitEvent
               evs <- pollEvents ev0
-              if elem AppQuit evs then pure () else
-              let s' = foldl updateState s evs in
-              loop rend font (s' /= s) s'
+              if elem AppQuit evs then pure () else do
+                  (d,s') <- foldlM (updateState window rend) (False,s) evs
+                  loop window rend font d s'
 
 export
 renderPictureGraph : PictureGraph 0 -> IO ()

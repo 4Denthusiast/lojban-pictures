@@ -15,6 +15,9 @@ import Graphics.SDL2.SDLTTF
 Point : Type
 Point = Vect 2 Double
 
+dot : Point -> Point -> Double
+dot p p' = sum $ zipWith (*) p p'
+
 record Angle where
     constructor Ang
     cos : Double
@@ -232,8 +235,6 @@ circumcircle (MkHull (p0::ps')) = twoPoint p1 p2
           ps = p0::ps'
           dist2 : Point -> Point -> Double
           dist2 p p' = sum $ map (\c => c*c) $ p <-> p'
-          dot : Point -> Point -> Double
-          dot p p' = sum $ zipWith (*) p p'
           minBy : Ord b => List Point -> (Point -> b) -> Point
           minBy ps' f = snd $ foldr max (f p0, p0) (map (\p => (f p, p)) (ps \\ ps'))
           p1 = minBy [p0] (negate . dist2 p0)
