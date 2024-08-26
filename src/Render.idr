@@ -7,6 +7,7 @@ import GraphSubstitution
 import VectorToPixel
 
 import Control.Algebra
+import Data.Bits
 import Data.SortedMap
 import Data.SortedSet
 import Data.Vect
@@ -132,20 +133,14 @@ address w h x y = if x >= 0 && x < w && y >= 0 && y < h then Just (4*(x+w*y)) el
 writeRawTex : Ptr -> Int -> Int -> Int -> Int -> (Bits8,Bits8,Bits8) -> IO ()
 writeRawTex txp w h x y (r,g,b) = case address w h x y of
     Nothing => pure ()
-    Just i => do
-        prim_poke8 txp (i+2) r
-        prim_poke8 txp (i+1) g
-        prim_poke8 txp (i+0) b
-        pure ()
+    Just i => prim_poke32 txp i (prim__orB32 (prim__shlB32 (prim__zextB8_B32 r) 16) $ prim__orB32 (prim__shlB32 (prim__zextB8_B32 g) 8) (prim__zextB8_B32 b)) *> pure ()
 
 readRawTex : Ptr -> Int -> Int -> Int -> Int -> IO (Bits8,Bits8,Bits8)
 readRawTex txp w h x y = case address w h x y of
     Nothing => pure (0,0,0)
     Just i => do
-        r <- prim_peek8 txp (i+2)
-        g <- prim_peek8 txp (i+1)
-        b <- prim_peek8 txp (i+0)
-        pure (r,g,b)
+        rgb <- prim_peek32 txp i
+        pure (prim__truncB32_B8 $ prim__lshrB32 rgb 16,prim__truncB32_B8 $ prim__lshrB32 rgb 8,prim__truncB32_B8 rgb)
 
 renderPicture : Picture -> IO ()
 renderPicture p = do

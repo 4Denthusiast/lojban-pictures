@@ -376,7 +376,7 @@ cmavrko'aStubPositions (NumberedStub Z) = Just $ MkPosition [0,0] neutral
 cmavrko'aStubPositions _ = Nothing
 
 cmavrleStubPositions : StubPositions
-cmavrleStubPositions (NumberedStub    Z ) = Just $ MkPosition [0,0.5] neutral
+cmavrleStubPositions (NumberedStub    Z ) = Just $ MkPosition [0,0.25] neutral
 cmavrleStubPositions (NumberedStub (S Z)) = Just $ MkPosition [0,-1 ] back
 cmavrleStubPositions _ = Nothing
 
@@ -503,11 +503,10 @@ namespace pictureLib
     -- LE
     
     lo : Picture
-    lo = Bezier [[0,-1],[-0.7,-0.3],[-0.7,0.5],[0,0.5]]
-     <+> Bezier [[0,-1],[ 0.7,-0.3],[ 0.7,0.5],[0,0.5]] --Bezier [[0,-1],[-1,1],[1,1],[0,-1]]
+    lo = Beziers [(Corner,[0,-1]),(Control,[-1,0]),(Control,[0,1]),(Control,[1,0])]
     
     le : Picture
-    le = lo <+> Dot [0,0]
+    le = lo <+> Dot [0,-0.2]
     
     -- NIhO
     
@@ -591,11 +590,12 @@ wordRecords = foldr (\w, t => insert (string w) w t) empty $ partialId [
         makeWordRecord' LE   "le" $ le,
         makeWordRecord' LE   "lo" $ lo,
         makeWordRecord' LI   "li" $
-            Line [-0.5,-1] [0.5,-1] <+>
-            Line [-0.3,-0.8] [0.3,-0.8] <+>
-            Bezier [[-0.3,-0.8],[-0.5,-0.8],[-0.7,-0.6],[-0.7,-0.4]] <+>
-            Bezier [[-0.7,-0.4],[-0.7,0.8],[0.7,0.8],[0.7,-0.4]] <+>
-            Bezier [[0.3,-0.8],[0.5,-0.8],[0.7,-0.6],[0.7,-0.4]],
+            Line [-0.5,-1] [0.5,-1] <+> Beziers [
+                (Smooth,[0.3,-0.8]),
+                (Smooth,[-0.3,-0.8]),(Control,[-0.5,-0.8]),(Control,[-0.7,-0.6]),
+                (Smooth,[-0.7,-0.4]),(Control,[-0.7,0.8]),(Control,[0.7,0.8]),
+                (Smooth,[0.7,-0.4]),(Control,[0.7,-0.6]),(Control,[0.5,-0.8])
+            ],
         makeWordRecord  NAI  "nai",
         makeWordRecord  NA   "na",
         MkWordRecord NIhO "ni'o" $ (\(MkWordContext _ _ ss) => MkWordPicture "ni'o" (if elem (NumberedStub 3) ss then ni'oMod else ni'oBase) cmavrni'oStubPositions),

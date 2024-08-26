@@ -246,10 +246,20 @@ circumcircle (MkHull (p0::ps')) = twoPoint p1 p2
               else if dot (p <->p'') (p <->p') < 0 then twoPoint p'' p'
               else triangleCircumcircle p p' p''
 
+public export
+data BezierPointType = Control | Smooth | Corner
+
+implementation Eq BezierPointType where
+    Control == Control = True
+    Smooth == Smooth = True
+    Corner == Corner = True
+    _ == _ = False
+
 data Picture : Type where
     Dot : Point -> Picture
     Line : Point -> Point -> Picture
-    Bezier : Vect 4 Point -> Picture
+    Bezier : Vect 4 Point -> Picture -- deprecated
+    Beziers : List (BezierPointType, Point) -> Picture
     Circle : Point -> Double -> Picture
     Text : String -> Picture
     Transformed : Transform -> Picture -> Picture
@@ -259,6 +269,7 @@ pictureHull : Picture -> ConvexHull
 pictureHull (Dot p) = makeHull [p]
 pictureHull (Line p p') = makeHull [p,p']
 pictureHull (Bezier ps) = makeHull $ toList ps
+pictureHull (Beziers ps) = makeHull $ map snd ps
 pictureHull (Circle p r) = transformHull (MkTransform (MkPosition p neutral) (r/y)) $ makeHull $ [[1,0],[0.5,-y],[-0.5,-y],[-1,0],[-0.5,y],[0.5,y]]
     where y = sqrt 3 / 2
 pictureHull (Text s) = let l = cast (length s) / 4 in makeHull [[-l,0],[0,l],[l,0],[0,-l]] -- I don't have any good estimate for text's size.
