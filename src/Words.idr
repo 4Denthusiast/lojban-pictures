@@ -380,6 +380,11 @@ cmavrleStubPositions (NumberedStub    Z ) = Just $ MkPosition [0,0.25] neutral
 cmavrleStubPositions (NumberedStub (S Z)) = Just $ MkPosition [0,-1 ] back
 cmavrleStubPositions _ = Nothing
 
+cmavrliStubPositions : StubPositions
+cmavrliStubPositions (NumberedStub    Z ) = Just $ MkPosition [0,0.5] neutral
+cmavrliStubPositions (NumberedStub (S Z)) = Just $ MkPosition [0,-1] back
+cmavrliStubPositions _ = Nothing
+
 cmavrni'oStubPositions : StubPositions
 cmavrni'oStubPositions (NumberedStub       Z  ) = Just $ MkPosition [-0.5,0] left
 cmavrni'oStubPositions (NumberedStub    (S Z) ) = Just $ MkPosition [ 0.5,0] right
@@ -428,7 +433,7 @@ stubPositionsBySelma'o I    = cmavrni'oStubPositions
 stubPositionsBySelma'o KOhA = cmavrko'aStubPositions
 stubPositionsBySelma'o KU   = emptyStubPositions
 stubPositionsBySelma'o LE   = cmavrleStubPositions
-stubPositionsBySelma'o LI   = cmavrleStubPositions
+stubPositionsBySelma'o LI   = cmavrliStubPositions
 stubPositionsBySelma'o NA   = cmavruiStubPositions
 stubPositionsBySelma'o NAI  = cmavruiStubPositions
 stubPositionsBySelma'o NIhO = cmavrni'oStubPositions

@@ -3,11 +3,12 @@ module VectorToPixel
 import Picture
 
 import Control.Algebra
+import Data.List
 import Data.Vect
 import Graphics.SDL2.SDLTTF
 
 lineWeight : Double
-lineWeight = 0.05
+lineWeight = 0.1
 
 public export
 Colour : Type
@@ -22,16 +23,23 @@ Writer = Int -> Int -> Colour -> IO ()
 Ink : Type
 Ink = Int -> Int -> Double -> IO ()
 
+-- TODO: optimise for the particular use case, with long forward and backward runs.
+sortOn : (Ord b) => (a -> b) -> List a -> List a
+sortOn f = map snd . sortBy (\(x,_), (y,_) => compare x y) . map (\x => (f x, x))
+
+mapPreservesNonempty : {l : List a} -> {f : a -> b} -> NonEmpty l -> NonEmpty (map f l)
+mapPreservesNonempty {l=(x::xs)} {f} IsNonEmpty = IsNonEmpty
+
 drawDot : Double -> Ink -> Point -> IO ()
 drawDot s ink [cx,cy] = for_ [(cast $ floor $ cy - weight - 0.5)..(cast $ ceiling $ cy + weight + 0.5)] (\y =>
         for_ [(cast $ floor $ cx - weight - 0.5)..(cast $ ceiling $ cx + weight + 0.5)] (\x => renderPoint x y)
     )
     where weight : Double
-          weight = lineWeight * s
+          weight = lineWeight * s -- the width is twice the line weight, otherwise dots are too small.
           renderPoint : Int -> Int -> IO ()
           renderPoint x y = let
                   r = sqrt $ (cast x - cx)*(cast x - cx) + (cast y - cy)*(cast y-cy)
-                  c = 1 - max 0 (r-weight-0.5)
+                  c = 1 - max 0 (r-weight+0.5)
               in if c > 0 then ink x y c else pure ()
 
 drawPlainLine : Ink -> Point -> Point -> IO ()
@@ -55,9 +63,11 @@ bezierToLines [] = []
 bezierToLines (p::ps0) = p :: splitUntil 10 (p::fromList ps0)
     where cross : Point -> Point -> Double
           cross [x,y] [x',y'] = (x*y'-y*x')/sqrt(x'*x'+y'*y')
+          tolerance : Double
+          tolerance = 0.2 --How far the lines may deviate from the curve, in pixels. This should be less than 1 to get good antialiasing.
           straightEnough : Vect (S len) Point -> Bool
           straightEnough c = let a = head c; b = last c in
-              all (\p => dot (p <-> a) (p <-> a) <= dot (a <-> b) (a <-> b) && dot (p <-> a) (b <-> a) >= 0 && dot (p <-> b) (a <-> b) >= 0 && 1 >= abs (cross (p <-> a) (b <-> a))) c
+              all (\p => dot (p <-> a) (p <-> a) <= dot (a <-> b) (a <-> b) && dot (p <-> a) (b <-> a) >= 0 && dot (p <-> b) (a <-> b) >= 0 && tolerance >= abs (cross (p <-> a) (b <-> a))) c
           firstHalf : Vect n Point -> Vect n Point
           firstHalf [] = []
           firstHalf (p0::ps) = p0 :: firstHalf (zipWith (\p, p' => map (/2) $ p <+> p') (init (p0::ps)) ps)
@@ -80,6 +90,9 @@ mergeCurves ((b,p::ps)::cs) = mergeCurves' b p ps cs
 
 -- MkLine a b c represents the locus of points such that ax+by=c.
 data Line = MkLine Double Double Double
+
+Segment : Type
+Segment = (Point,Line,Point)
 
 makeLine : Double -> Double -> Double -> Line
 makeLine a b c = MkLine (a/l) (b/l) (c/l)
@@ -113,12 +126,13 @@ verticalIntersect (MkLine a b c) x = [x, (c-a*x)/b]
 rotate : {a:Type} -> {n:Nat} -> Vect (S n) a -> Vect (S n) a
 rotate {a} {n} (x::xs) = replace {P=(\n' => Vect n' a)} (trans (plusCommutative n 1) (plusOneSucc n)) $ xs ++ [x]
 
-intersections : Vect (S n) Line -> Vect (S n) (Point,Line)
-intersections ls = zipWith (\l, l' => (intersection l l', l)) ls (rotate ls)
+intersections : Vect (S n) Line -> Vect (S n) Segment
+intersections ls = zip3 ps (rotate ls) (rotate ps)
+    where ps = zipWith intersection ls (rotate ls)
 
-thickenCurve : {n:Nat} -> Double -> (Bool, Vect n (Bool, Point)) -> List Point
+thickenCurve : {n:Nat} -> Double -> (Bool, Vect n (Bool, Point)) -> List Segment
 thickenCurve s (_, []) = []
-thickenCurve s (_, [(b0,p0)]) = [p0]
+thickenCurve s (_, [(b0,p0)]) = [] --TODO: I guess substitute in point rendering somehow?
 thickenCurve s (True, [p0,p1]) = thickenCurve s (False, [p0,p1])
 -- TODO: I can probably unify these latter two cases again.
 thickenCurve {n=S (S n')} s (True, ps) = toList $ intersections $ flipLine closeLine :: (lines ++ (closeLine :: otherLines))
@@ -127,13 +141,13 @@ thickenCurve {n=S (S n')} s (True, ps) = toList $ intersections $ flipLine close
           ps' : Vect (S (S n')) Point
           ps' = map snd ps
           lines : Vect n Line
-          lines = map (offsetLine (lineWeight*s)) $ zipWith lineThrough (init ps') (tail ps')
+          lines = map (offsetLine (lineWeight*s/2)) $ zipWith lineThrough (init ps') (tail ps')
           otherLines : Vect n Line
-          otherLines = map (offsetLine (2*lineWeight*s) . flipLine) (reverse lines)
+          otherLines = map (offsetLine (lineWeight*s) . flipLine) (reverse lines)
           closePoint : Vect n Line -> Point
           closePoint ls = intersection (head ls) (last ls)
           closeLine = lineThrough (closePoint lines) (closePoint otherLines)
-thickenCurve {n=S (S n')} s (False, ps) = toList $ intersections $ map (offsetLine (lineWeight*s)) $ endCap ps' :: (lines ++ (endCap $ reverse ps') :: otherLines)
+thickenCurve {n=S (S n')} s (False, ps) = toList $ intersections $ map (offsetLine (lineWeight*s/2)) $ endCap ps' :: (lines ++ (endCap $ reverse ps') :: otherLines)
     where ps' : Vect (S (S n')) Point
           ps' = map snd ps
           lines : Vect (S n') Line
@@ -142,49 +156,62 @@ thickenCurve {n=S (S n')} s (False, ps) = toList $ intersections $ map (offsetLi
           otherLines = map flipLine (reverse lines)
           endCap ([x,y]::[x',y']::_) = makeLine (x-x') (y-y') (x*(x-x')+y*(y-y'))
 
--- TODO: It would probably actually be more efficient to remove this entire step and just sort the lines individually.
-verticalSegments : List (Point,Line) -> List (Point, List (Line,Point))
-verticalSegments pls0 = sortBy (\([_,y],_), ([_,y'],_) => compare y y') $ oneSide True [] (reverse $ addNextPoints pls0) ++ oneSide False [] (map (\(p,l,p') => (p',l,p)) $ addNextPoints pls0)
-    where addNextPoints : List (Point,Line) -> List (Point,Line,Point)
-          addNextPoints [] = []
-          addNextPoints ((p,l)::pls) = addNextPoints' p ((p,l)::pls) {ok=IsNonEmpty}
-          addNextPoints' : Point -> l:List (Point,Line) -> {ok:NonEmpty l} -> List
-          addNextPoints' p0 [(p,l)] = [(p,l,p0)]
-          addNextPoints' p0 ((p,l)::(p',l')::pls) = (p,l,p') :: addNextPoints' p0 ((p',l')::pls)
-          rightFacing : (Point,Line,Point) -> Bool
-          rightFacing (_,MkLine x _ _,_) = x > 0
-          oneSide : Bool -> List (Line,Point) -> List (Point,Line,Point) -> List (Point, List (Line,Point))
-          oneSide r seg (plp::plps) | rightFacing plp == r = oneSide r (plp::seg) plps
-          oneSide r ((p,l,p')::seg) plps = (p, map snd $ (p,l,p')::seg) :: oneSide r [] plps
-          oneSide r [] (plp::plps) = oneSide r [] plps
-          oneSide r [] [] = []
+-- Put the end that's first in the given dimension first.
+orient : Fin 2 -> Segment -> Segment
+orient i (p,l,p') = if index i p <= index i p' then (p,l,p') else (p',l,p)
 
 -- This assumes the (x,y) pixel covers [x,x+1]*[y,y+1], which is inconsistent with some of the other primitives.
-fillPolygon' : Ink -> Double -> Double -> Double -> Double -> List (List (Line,Point)) -> List (Point, List (Line,Point)) -> IO ()
+fillPolygon' : Ink -> List Int -> List Int -> List Segment -> List Segment -> IO ()
 fillPolygon' ink xRange [] incoming segs = pure ()
-fillPolygon' ink xRange (y0::yRange) incoming segs = fillLine 0 xRange [] lines *> fillPolygon' ink xRange yRange outgoing remainingSegs
-    where (newSegs, remainingSegs) = span (\([_,y],_) => y <= (cast y0 + 1)) segs
-          lineStarts = newSegs ++ mapMaybe (\inc => case inc of
-                  [] => Nothing
-                  ((l,p)::inc') => Just (horizontalIntersect l y0, (l,p)::inc')
-              )
-          followLine : (Point, List (Line, Point)) -> (Maybe (List (Line,Point)), List (Point,Line,Point))
-          followLine (p,[]) = (Nothing, [])
-          followLine (p,(l,[x,y])::lps) = if y > cast y0 + 1
-              then (Just ((l,[x,y])::lps), [(p,l,horizontalIntersect l (cast y0 + 1))])
-              else ((p,l,[x,y])::) <$> followLine ([x,y],lps)
-          outgoingAndLines = map followLine lineStarts
-          lines = sortBy (\([x,_],_), ([x',_],_) => compare x x') $ map (\(p,l,p') => if head p < head p' then (p,l,p') else (p',l,p)) $ concatMap snd outgoingAndLines
-          outgoing = mapMaybes fst outgoingAndLines
-          fillLine covered [] incomingX ls = pure ()
-          fillLine covered (x0::xs) ls
+fillPolygon' ink xRange (y0::yRange) incoming segs = fillLine 0 xRange [] yIntersects lines *> fillPolygon' ink xRange yRange outgoing remainingSegs
+    where newSegs : List Segment
+          newSegs = fst $ span (\([_,y],_) => y <= (cast y0 + 1)) segs
+          remainingSegs = snd $ span (\([_,y],_) => y <= (cast y0 + 1)) segs
+          trimLine : (Point, Line, Point) -> (Maybe Segment, Segment)
+          trimLine (p,l,[x,y]) = if y > cast y0 + 1
+              then let p' = horizontalIntersect l (cast y0 + 1) in (Just (p',l,[x,y]),(p,l,p'))
+              else (Nothing, (p,l,[x,y]))
+          outgoingAndLines : (List (Maybe Segment),List Segment)
+          outgoingAndLines = unzip $ map trimLine (newSegs ++ incoming)
+          lines = sortOn (head . fst) $ map (orient 0) $ snd outgoingAndLines
+          outgoing = catMaybes $ fst outgoingAndLines
+          yIntersects = sortOn fst $ map (\([xi,_],MkLine xp _ _,_) => (xi,if xp<0 then 1 else -1)) incoming
+          fillLine : Int -> List Int -> List Segment -> List (Double,Int) -> List Segment -> IO ()
+          fillLine covered [] incomingX is ls = pure ()
+          fillLine covered (x0::xs) incomingX is ls = ink x0 y0 colour *> fillLine covered' xs outgoingX is' remainingSegsX
+              where borderPoints : List (Double, Int)
+                    borderPoints = fst $ span ((< cast x0 + 1).fst) is
+                    covered' = (covered+) $ sum $ map snd borderPoints
+                    is' = snd $ span ((< cast x0 + 1) . fst) is
+                    newSegsX : List Segment
+                    newSegsX = fst $ span (\([x,_],_) => x <= cast x0 + 1) ls
+                    remainingSegsX : List Segment
+                    remainingSegsX = snd $ span (\([x,_],_) => x <= cast x0 + 1) ls
+                    trimLineX : Segment -> (Maybe Segment, Segment)
+                    trimLineX (p,l,[x,y]) = if x > cast x0 + 1
+                        then let p' = verticalIntersect l (cast x0 + 1) in (Just (p',l,[x,y]),(p,l,p'))
+                        else (Nothing, (p,l,[x,y]))
+                    outgoingAndLinesX : (List (Maybe Segment), List Segment)
+                    outgoingAndLinesX = unzip $ map trimLineX $ newSegsX ++ incomingX
+                    linesX : List Segment
+                    linesX = snd outgoingAndLinesX
+                    outgoingX : List Segment
+                    outgoingX = catMaybes $ fst outgoingAndLinesX
+                    borderColour : Double
+                    borderColour = ((cast covered)+) $ sum $ map (\(x,s) => (cast x0+1-x)*cast s) borderPoints
+                    segCovered : Segment -> Double
+                    segCovered ([x,y],MkLine _ yp _,[x',y']) = (cast y0 + 1 - (y+y')/2) * (x'-x) * if yp > 0 then -1 else 1
+                    colour = borderColour + sum (map segCovered linesX)
 
-fillPolygon : Ink -> List (Point,Line) -> IO ()
+fillPolygon : Ink -> List Segment -> IO ()
 fillPolygon ink [] = pure ()
-fillPolygon ink (pl::pls) = fillPolygon' ink (rangeOf $ map head ps) (rangeOf $ map (index 1) ps) [] $ verticalSegments (pl::pls)
-    where ps = map fst (pl::pls)
+fillPolygon ink (pl::pls) = fillPolygon' ink (rangeOf {ok=mapPreservesNonempty psne} $ map head ps) (rangeOf {ok=mapPreservesNonempty psne} $ map (Data.Vect.index 1) ps) [] $ sortOn (Data.Vect.head . tail . fst) $ map (orient 1) (pl::pls)
+    where ps : List Point
+          ps = map fst (pl::pls)
+          psne : NonEmpty ps
+          psne = mapPreservesNonempty IsNonEmpty
           rangeOf : (l:List Double) -> {ok:NonEmpty l} -> List Int
-          rangeOf xs = [(floor $ cast $ foldr1 min xs)..(ceiling $ cast $ foldr1 max xs)]
+          rangeOf xs = [(cast $ floor $ foldr1 min xs)..(cast $ ceiling $ foldr1 max xs)]
 
 drawBeziers : Double -> Ink -> List (BezierPointType, Point) -> IO ()
 drawBeziers s ink ps = fillPolygon ink $ thickenCurve s (fst closeAndCurve, fromList singleCurve)
@@ -208,11 +235,11 @@ drawCircle s ink [cx,cy] r = for_ [(cast $ floor $ cy - r - weight - 0.5)..(cast
         in for_ area (\x => renderPoint x y)
     )
     where weight : Double
-          weight = lineWeight * s
+          weight = lineWeight * s / 2
           renderPoint : Int -> Int -> IO ()
           renderPoint x y = let
                   r' = sqrt $ (cast x - cx)*(cast x - cx) + (cast y - cy)*(cast y-cy)
-                  c = 1 - max 0 (r'-r-weight-0.5) - max 0 (r-r'-weight-0.5)
+                  c = 1 - max 0 (r'-r-weight+0.5) - max 0 (r-r'-weight+0.5)
               in if c > 0 then ink x y c else pure ()
 
 export
@@ -229,7 +256,9 @@ drawRaw s t read write w h font pic = if culled (transformHull t $ pictureHull p
     where decrease : Bits8 -> Double -> Bits8
           decrease b c = let c' = fromInteger $ cast (255*c) in if c' > b then 0 else b + 255*c' -- subtraction isn't allowed with Bits8s, but 255 = -1
           ink : Ink
-          ink x y c = do
-              (r,g,b) <- read x y
-              write x y (decrease r c, decrease g c, decrease b c)
+          ink x y c = if c <= 0
+              then pure () else if c >= 1
+              then write x y (0,0,0) else do
+                  (r,g,b) <- read x y
+                  write x y (decrease r c, decrease g c, decrease b c)
           culled (MkHull pts) = all (\[x,_] => x < 0) pts || all (\[_,y] => y < 0) pts || all (\[x,_] => x > cast w) pts || all (\[_,y] => y > cast h) pts
