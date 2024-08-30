@@ -76,7 +76,7 @@ absorbLeaf nl0 g = fromMaybe g $ do
                 else Line [0,0] [0,2] <+> Transformed (MkTransform (MkPosition [0,2] back <-> ls) 1) lPic
         )
     let g' = foldr (\(_,nl1), g0 => deleteNode g0 nl1) g es'
-    pure $ setNode g' nl0 (bPic <+> Pictures pics, bStubs)
+    pure $ setNode g' nl0 (pictures (bPic::pics), bStubs)
     
 absorbLeaves : SGraph (Edge PictureEdgeLabel) ProcessedWord -> SGraph (Edge PictureEdgeLabel) ProcessedWord
 absorbLeaves g = let g' = foldr absorbLeaf g (keys $ nodeMap g) in

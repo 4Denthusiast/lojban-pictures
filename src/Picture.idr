@@ -18,6 +18,9 @@ Point = Vect 2 Double
 dot : Point -> Point -> Double
 dot p p' = sum $ zipWith (*) p p'
 
+cross : Point -> Point -> Double
+cross [x,y] [x',y'] = (x*y'-y*x')
+
 record Angle where
     constructor Ang
     cos : Double
@@ -126,23 +129,26 @@ data ConvexHull = MkHull (List Point)
 Show ConvexHull where
     showPrec d (MkHull ps) = showCon d "MkHull" $ showArg ps
 
+-- If I were using exact arithmetic, the "rightness" check would be superfluous. With floats, it prevents collinear points from appearing on the boundary in the wrong order. All the other simpler algorithms I could think of also suffer from numerical instability.
+hullInterval : Nat -> Point -> Point -> List Point -> List Point
+hullInterval Z _ _ = idris_crash "Ran out of time when computing a convex hull." -- I know this is impossible to reach. It's just easier to have the explicit limit so the totality checker accepts the implementaiton.
+hullInterval (S t) pl pr = hullInterval' . filter ((>0) . fst) . map (\p => (cross (pr <-> pl) (p <-> pl), p))
+    where hullInterval' : List (Double, Point) -> List Point
+          hullInterval' [] = [pl]
+          hullInterval' (p0::ps0) = let
+                  pivot = snd $ foldr max p0 ps0
+                  ps = map snd (p0::ps0)
+                  rightness = \p => dot (p <-> pl) (pr <-> pl)
+              in hullInterval t pl pivot (filter (\p => rightness p < rightness pivot) ps) ++ hullInterval t pivot pr (filter (\p => rightness p > rightness pivot) ps)
+
 makeHull : List Point -> ConvexHull
 makeHull [] = MkHull []
-makeHull ps = MkHull $ reverse $ foldl addPoint [] sorted
-    where pivot : Point
-          pivot = foldr1 max ps
-          angleTo : Point -> Point -> Double
-          angleTo p p' = (\[x,y] => atan2 x y) $ p' <-> p
-          cmpAngle : Point -> Point -> Ordering
-          cmpAngle p p' = compare (angleTo pivot p) (angleTo pivot p')
-          sorted : List Point
-          sorted = sortBy cmpAngle ps
-          addPoint : List Point -> Point -> List Point
-          addPoint [] p = [p]
-          addPoint [ep] p = [p,ep]
-          addPoint (ep::pp::h) p = if angleTo pp p > angleTo pp ep then p::ep::pp::h else p::pp::h
-          debug : List Point -> List Point
-          debug x = trace ("Making hull of "++show ps++"\n\tPivot: "++show pivot++"\n\tSorted: "++show sorted++"\n\tFinal: "++show x) x
+makeHull [p] = MkHull [p]
+makeHull (p0::ps0) = MkHull $ hullInterval (Prelude.List.length ps) leftPoint rightPoint ps ++ hullInterval (Prelude.List.length ps) rightPoint leftPoint ps
+    where ps : List Point
+          ps = p0::ps0
+          leftPoint = foldr max p0 ps0
+          rightPoint = foldr min p0 ps0
 
 emptyHull : ConvexHull
 emptyHull = makeHull []
@@ -263,7 +269,7 @@ data Picture : Type where
     Circle : Point -> Double -> Picture
     Text : String -> Picture
     Transformed : Transform -> Picture -> Picture
-    Pictures : List Picture -> Picture
+    Pictures : List Picture -> ConvexHull -> Picture
 
 pictureHull : Picture -> ConvexHull
 pictureHull (Dot p) = makeHull [p]
@@ -274,13 +280,17 @@ pictureHull (Circle p r) = transformHull (MkTransform (MkPosition p neutral) (r/
     where y = sqrt 3 / 2
 pictureHull (Text s) = let l = cast (length s) / 4 in makeHull [[-l,0],[0,l],[l,0],[0,-l]] -- I don't have any good estimate for text's size.
 pictureHull (Transformed t p) = transformHull t $ pictureHull p
-pictureHull (Pictures ps) = hullUnion $ map pictureHull ps
+pictureHull (Pictures ps h) = h
+
+public export
+pictures : List Picture -> Picture
+pictures ps = Pictures ps (hullUnion $ map pictureHull ps)
 
 Semigroup Picture where
-    (<+>) a b = Pictures [a,b]
+    (<+>) a b = pictures [a,b]
 
 blankPicture : Picture
-blankPicture = Pictures []
+blankPicture = pictures []
 
 Show Picture where
     show p = "Pict"
@@ -307,4 +317,4 @@ draw t rend font (Text s) = let
         [x,y] = transformToInt t [0,0]
     in renderTextSolid rend font s black x y
 draw t rend font (Transformed t' p) = draw (t <+> t') rend font p
-draw t rend font (Pictures ps) = traverse_ (draw t rend font) ps
+draw t rend font (Pictures ps h) = traverse_ (draw t rend font) ps

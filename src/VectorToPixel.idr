@@ -49,6 +49,10 @@ drawPlainLine ink [x0,y0] [x1,y1] = if abs (x0 - x1) < abs (y0 - y1) then l' (fl
           l' : Ink -> Point -> Point -> IO ()
           l' ink' [x,y] [x',y'] = if x < x' then l'' ink' [x,y] [x',y'] else l'' ink' [x',y'] [x,y]
 
+drawHull : Ink -> ConvexHull -> IO ()
+drawHull ink (MkHull []) = pure ()
+drawHull ink (MkHull (p::ps)) = flip for_ (uncurry (drawPlainLine ink)) $ Prelude.List.zip (p::ps) (ps++[p])
+
 segmentBeziers : List (BezierPointType, Point) -> (Bool, List (Bool, List Point))
 segmentBeziers [] = (False, [])
 segmentBeziers ((t0,p0)::ps0) = if t0 == Control
@@ -58,16 +62,22 @@ segmentBeziers ((t0,p0)::ps0) = if t0 == Control
           segment' [] = []
           segment' ((t1,p)::ps) = let (psl,psr) = span ((==Control).fst) ps in (t1==Corner,p::map snd (psl ++ take 1 psr))::segment' psr
 
-bezierToLines : List Point -> List Point
-bezierToLines [] = []
-bezierToLines (p::ps0) = p :: splitUntil 10 (p::fromList ps0)
-    where cross : Point -> Point -> Double
-          cross [x,y] [x',y'] = (x*y'-y*x')/sqrt(x'*x'+y'*y')
-          tolerance : Double
+bezierToLines : Double -> Int -> Int -> List Point -> List Point
+bezierToLines s w h [] = []
+bezierToLines s w h (p::ps0) = p :: splitUntil 10 (p::fromList ps0)
+    where tolerance : Double
           tolerance = 0.2 --How far the lines may deviate from the curve, in pixels. This should be less than 1 to get good antialiasing.
           straightEnough : Vect (S len) Point -> Bool
-          straightEnough c = let a = head c; b = last c in
-              all (\p => dot (p <-> a) (p <-> a) <= dot (a <-> b) (a <-> b) && dot (p <-> a) (b <-> a) >= 0 && dot (p <-> b) (a <-> b) >= 0 && tolerance >= abs (cross (p <-> a) (b <-> a))) c
+          straightEnough c = let
+                  a = head c
+                  b = last c
+                  ab2 = dot (a <-> b) (a <-> b)
+                  ax = head a
+                  ay = head (tail a)
+                  bx = head b
+                  by = head (tail b)
+                  tolerance = max 0.2 $ (\d => (d-s*lineWeight/2)/2) $ foldl1 max $ the (List Double) [min (-ax) (-bx), min (-ay) (-by), (min ax bx-cast w), (min ay by-cast h)] -- The tolerance for things on-screen is less than 1px to allow for smooth antialiasing.
+              in all (\p => dot (p <-> a) (p <-> a) <= ab2 && dot (p <-> a) (b <-> a) >= 0 && dot (p <-> b) (a <-> b) >= 0 && tolerance >= abs (cross (p <-> a) (b <-> a)/sqrt ab2)) c
           firstHalf : Vect n Point -> Vect n Point
           firstHalf [] = []
           firstHalf (p0::ps) = p0 :: firstHalf (zipWith (\p, p' => map (/2) $ p <+> p') (init (p0::ps)) ps)
@@ -203,35 +213,39 @@ fillPolygon' ink xRange (y0::yRange) incoming segs = fillLine 0 xRange [] yInter
                     segCovered ([x,y],MkLine _ yp _,[x',y']) = (cast y0 + 1 - (y+y')/2) * (x'-x) * if yp > 0 then -1 else 1
                     colour = borderColour + sum (map segCovered linesX)
 
-fillPolygon : Ink -> List Segment -> IO ()
-fillPolygon ink [] = pure ()
-fillPolygon ink (pl::pls) = fillPolygon' ink (rangeOf {ok=mapPreservesNonempty psne} $ map head ps) (rangeOf {ok=mapPreservesNonempty psne} $ map (Data.Vect.index 1) ps) [] $ sortOn (Data.Vect.head . tail . fst) $ map (orient 1) (pl::pls)
+fillPolygon : Ink -> Int -> Int -> List Segment -> IO ()
+fillPolygon ink w h [] = pure ()
+fillPolygon ink w h (pl::pls) = fillPolygon' ink (rangeOf w {ok=mapPreservesNonempty psne} $ map head ps) (rangeOf h {ok=mapPreservesNonempty psne} $ map (Data.Vect.index 1) ps) [] $ sortOn (Data.Vect.head . tail . fst) $ map (orient 1) (pl::pls)
     where ps : List Point
           ps = map fst (pl::pls)
           psne : NonEmpty ps
           psne = mapPreservesNonempty IsNonEmpty
-          rangeOf : (l:List Double) -> {ok:NonEmpty l} -> List Int
-          rangeOf xs = [(cast $ floor $ foldr1 min xs)..(cast $ ceiling $ foldr1 max xs)]
+          rangeOf : Int -> (l:List Double) -> {ok:NonEmpty l} -> List Int
+          rangeOf lim xs = let
+                  low = cast $ floor $ foldr1 min xs
+                  high = cast $ ceiling $ foldr1 max xs
+              in if low >= lim || high < -1 then [] else [(max (-1) low)..(min lim high)]
 
-drawBeziers : Double -> Ink -> List (BezierPointType, Point) -> IO ()
-drawBeziers s ink ps = fillPolygon ink $ thickenCurve s (fst closeAndCurve, fromList singleCurve)
+drawBeziers : Double -> Int -> Int -> Ink -> List (BezierPointType, Point) -> IO ()
+drawBeziers s w h ink ps = fillPolygon ink w h $ thickenCurve s (fst closeAndCurve, fromList singleCurve)
     where closeAndCurve : Pair Bool (List (Bool, Point))
-          closeAndCurve = map mergeCurves $ map (map (map bezierToLines)) $ segmentBeziers ps
+          closeAndCurve = map mergeCurves $ map (map (map (bezierToLines s w h))) $ segmentBeziers ps
           singleCurve = snd closeAndCurve
 
-drawBezier : Double -> Ink -> Vect 4 Point -> IO ()
-drawBezier s ink ps = drawBeziers s ink $ toList $ map (\p => (Control,p)) ps
+drawBezier : Double -> Int -> Int -> Ink -> Vect 4 Point -> IO ()
+drawBezier s w h ink ps = drawBeziers s w h ink $ toList $ map (\p => (Control,p)) ps
 
-drawLine : Double -> Ink -> Point -> Point -> IO ()
-drawLine s ink p0 p1 = drawBeziers s ink [(Control,p0),(Control,p1)]
+drawLine : Double -> Int -> Int -> Ink -> Point -> Point -> IO ()
+drawLine s w h ink p0 p1 = drawBeziers s w h ink [(Control,p0),(Control,p1)]
 
-drawCircle : Double -> Ink -> Point -> Double -> IO ()
-drawCircle s ink [cx,cy] r = for_ [(cast $ floor $ cy - r - weight - 0.5)..(cast $ ceiling $ cy + r + weight + 0.5)] (\y =>
+drawCircle : Double -> Int -> Int -> Ink -> Point -> Double -> IO ()
+drawCircle s w h ink [cx,cy] r = for_ [(max 0 $ cast $ floor $ cy - r - weight - 0.5)..(min h $ cast $ ceiling $ cy + r + weight + 0.5)] (\y =>
         let yoff = cast y - cy
             -- The 2s here are just to be conservative about rounding.
             xOuter = cast $ sqrt $ (r+weight+2)*(r+weight+2) - yoff*yoff
             xInner = cast $ sqrt $ (r-weight-2)*(r-weight-2) - yoff*yoff
-            area = if xInner == 0 then [(cast cx-xOuter)..(cast cx+xOuter)] else [(cast cx-xOuter)..(cast cx-xInner)] ++ [(cast cx+xInner)..(cast cx+xOuter)]
+            range = \a, b => if a > w || b < 0 then [] else [(max a 0)..(min b w)]
+            area = if xInner == 0 then range (cast cx-xOuter) (cast cx+xOuter) else range (cast cx-xOuter) (cast cx-xInner) ++ range (cast cx+xInner) (cast cx+xOuter)
         in for_ area (\x => renderPoint x y)
     )
     where weight : Double
@@ -246,13 +260,13 @@ export
 drawRaw : Double -> Transform -> (Int -> Int -> IO Colour) -> (Int -> Int -> Colour -> IO ()) -> Int -> Int -> SDLFont -> Picture -> IO ()
 drawRaw s t read write w h font pic = if culled (transformHull t $ pictureHull pic) then pure () else case pic of
         Dot p => drawDot s ink (applyTransform t p)
-        Line p p' => drawLine s ink (applyTransform t p) (applyTransform t p')
-        Bezier ps => drawBezier s ink (map (applyTransform t) ps)
-        Beziers ps => drawBeziers s ink (map (map $ applyTransform t) ps)
-        Circle p r => drawCircle s ink (applyTransform t p) (r * scale t)
+        Line p p' => drawLine s w h ink (applyTransform t p) (applyTransform t p')
+        Bezier ps => drawBezier s w h ink (map (applyTransform t) ps)
+        Beziers ps => drawBeziers s w h ink (map (map $ applyTransform t) ps)
+        Circle p r => drawCircle s w h ink (applyTransform t p) (r * scale t)
         Text text => pure ()
         Transformed t' pic' => drawRaw s (t <+> t') read write w h font pic'
-        Pictures pics => for_ pics (drawRaw s t read write w h font)
+        Pictures pics _ => for_ pics (drawRaw s t read write w h font)
     where decrease : Bits8 -> Double -> Bits8
           decrease b c = let c' = fromInteger $ cast (255*c) in if c' > b then 0 else b + 255*c' -- subtraction isn't allowed with Bits8s, but 255 = -1
           ink : Ink
@@ -261,4 +275,6 @@ drawRaw s t read write w h font pic = if culled (transformHull t $ pictureHull p
               then write x y (0,0,0) else do
                   (r,g,b) <- read x y
                   write x y (decrease r c, decrease g c, decrease b c)
-          culled (MkHull pts) = all (\[x,_] => x < 0) pts || all (\[_,y] => y < 0) pts || all (\[x,_] => x > cast w) pts || all (\[_,y] => y > cast h) pts
+          weight : Double
+          weight = lineWeight * s
+          culled (MkHull pts) = all (\[x,_] => x < -weight) pts || all (\[_,y] => y < -weight) pts || all (\[x,_] => x > cast w + weight) pts || all (\[_,y] => y > cast h + weight) pts
