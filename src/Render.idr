@@ -16,6 +16,9 @@ import Graphics.Color
 import Graphics.SDL2.SDL
 import Graphics.SDL2.SDLTTF
 
+%include C "graphics.h"
+%link C "graphics.o"
+
 ProcessedWord : Type
 ProcessedWord = (Picture, SortedMap (NodeLabel, PictureStubLabel) Position)
 
@@ -127,20 +130,8 @@ normalisePlacementTransform : Picture -> Transform
 normalisePlacementTransform p = let (c, r) = circumcircle $ pictureHull p
     in scaleTransform (1/(r+1)) <+> translateTransform (inverse c)
 
-address : Int -> Int -> Int -> Int -> Maybe Int
-address w h x y = if x >= 0 && x < w && y >= 0 && y < h then Just (4*(x+w*y)) else Nothing
-
-writeRawTex : Ptr -> Int -> Int -> Int -> Int -> (Bits8,Bits8,Bits8) -> IO ()
-writeRawTex txp w h x y (r,g,b) = case address w h x y of
-    Nothing => pure ()
-    Just i => prim_poke32 txp i (prim__orB32 (prim__shlB32 (prim__zextB8_B32 r) 16) $ prim__orB32 (prim__shlB32 (prim__zextB8_B32 g) 8) (prim__zextB8_B32 b)) *> pure ()
-
-readRawTex : Ptr -> Int -> Int -> Int -> Int -> IO (Bits8,Bits8,Bits8)
-readRawTex txp w h x y = case address w h x y of
-    Nothing => pure (0,0,0)
-    Just i => do
-        rgb <- prim_peek32 txp i
-        pure (prim__truncB32_B8 $ prim__lshrB32 rgb 16,prim__truncB32_B8 $ prim__lshrB32 rgb 8,prim__truncB32_B8 rgb)
+blankTex : Ptr -> Int -> Int -> IO ()
+blankTex = foreign FFI_C "blank" (Ptr -> Int -> Int -> IO ())
 
 renderPicture : Picture -> IO ()
 renderPicture p = do
@@ -171,10 +162,8 @@ renderPicture p = do
               if refresh then do
                   (MkTextureRaw txp pitch) <- lockTexture $ fst $ texture s
                   let (w,h) = snd $ texture s
-                  for_ [0..(w-1)] (\x => for_ [0..(h-1)] (\y => writeRawTex txp w h x y (255,255,255)))
-                  -- Consider writing everything to a Data.IOArray first. It might be more efficient.
-                  --drawRaw 1 neutral (readRawTex txp w h) (writeRawTex txp w h) w h font (Bezier [[10,10],[10,590],[590,590],[590,10]])
-                  drawRaw (scale $ transform s) (transform s) (readRawTex txp w h) (writeRawTex txp w h) w h font p
+                  blankTex txp w h
+                  drawRaw (scale $ transform s) (transform s) txp w h font p
                   unlockTexture $ fst $ texture s
                   renderCopyFull rend (fst $ texture s)
                   renderPresent rend
